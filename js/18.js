@@ -12,12 +12,16 @@ APP.addEventListener('click',async e=>{
   if(a==='view'){U.view=b.dataset.view;U.setCategory=null;render();return;}
   if(a==='favorite'){toggleFavorite(b.dataset.kind,b.dataset.id);return;}
   if(a==='toggle-starter'){toggleStarter(b.dataset.id);return;}
+  if(a==='release-artist'){const x=artistById(b.dataset.id);if(x&&confirm(`¿Dejar libre a ${x.name}?`))releaseArtist(x.id);return;}
+  if(a==='release-pro'){const x=proById(b.dataset.id);if(x&&confirm(`¿Desvincular a ${x.name}?`))releaseProfessional(x.id);return;}
   if(a==='market-type'){U.marketType=b.dataset.val;U.filters.role='Todos';render();return;}
   if(a==='set-cat'){U.setCategory=b.dataset.val;render();return;}if(a==='set-back'){U.setCategory=null;render();return;}
   if(a==='open-set'){U.selectedSet=b.dataset.id;U.modal='set';render();return;}
   if(a==='artist'){U.selectedSet=b.dataset.id;U.modal='artist';render();return;}if(a==='pro'){U.selectedSet=b.dataset.id;U.modal='pro';render();return;}
   if(a==='close-modal'){U.modal=null;U.negotiation=null;render();return;}
   if(a==='plan-rehearsal'){U.rehearsal={day:Number(b.dataset.day),parts:[]};U.modal='rehearsal';render();return;}
+  if(a==='plan-festival'){planFestival(Number(b.dataset.day));return;}
+  if(a==='remove-event'){removePlanned(b.dataset.id);return;}
   if(a==='add-part'){const p=b.dataset.val,cost=U.rehearsal.parts.reduce((n,x)=>n+(x==='Ensayo completo'?2:1),0)+(p==='Ensayo completo'?2:1);if(cost<=3)U.rehearsal.parts.push(p);render();return;}
   if(a==='remove-part'){U.rehearsal.parts.splice(Number(b.dataset.index),1);render();return;}
   if(a==='save-rehearsal'){saveRehearsal();return;}
