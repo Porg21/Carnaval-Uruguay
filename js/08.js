@@ -1,0 +1,20 @@
+function setupView(){
+  const s=U.setup;let body='';
+  if(U.setupStep===0)body=`<h2>Creá tu conjunto</h2><div class="field"><label>Nombre del conjunto</label><input id="setupName" value="${esc(s.name)}" placeholder="Ej.: La Nueva Noche"></div>`;
+  if(U.setupStep===1)body=`<h2>Elegí categoría</h2><div class="choices">${Object.entries(CAT).map(([k,c])=>`<button class="choice ${s.cat===k?'on':''}" data-act="setup-cat" data-val="${k}"><b>${c.icon} ${c.label}</b><small>${c.count} conjuntos · ${c.liguilla} pasan a Liguilla.</small></button>`).join('')}</div>`;
+  if(U.setupStep===2)body=`<h2>Economía inicial</h2><div class="choices">${Object.entries(DIF).map(([k,v])=>`<button class="choice ${s.dif===k?'on':''}" data-act="setup-dif" data-val="${k}"><b>${k}</b><small>${money(v)}. El plantel siempre empieza flojo.</small></button>`).join('')}</div>`;
+  if(U.setupStep===3)body=`<h2>Primera temporada</h2><div class="choices">${['Dar Prueba de Admisión','Directo al Carnaval'].map(k=>`<button class="choice ${s.first===k?'on':''}" data-act="setup-first" data-val="${k}"><b>${k}</b><small>${k.startsWith('Dar')?'En noviembre disputarás la Prueba de Admisión.':'Tenés lugar asegurado en febrero solamente el primer año.'}</small></button>`).join('')}</div>`;
+  APP.innerHTML=`<div class="wrap setup"><div class="hero"><div class="kicker">Nueva partida · v0.2</div><h1 style="margin-top:5px">Carnaval Uruguay</h1><p class="muted">Hola, ${esc(profile?.username||'Jugador')}. Esta partida se guardará en la nube.</p>${body}<div class="split" style="margin-top:16px"><button class="btn alt" data-act="setup-back" ${U.setupStep===0?'disabled':''}>Atrás</button><span class="muted">Paso ${U.setupStep+1} de 4</span><button class="btn" data-act="setup-next">${U.setupStep===3?'Empezar temporada':'Siguiente'}</button></div></div></div>`;
+}
+function canNextSetup(){if(U.setupStep===0)return U.setup.name.trim().length>=2;if(U.setupStep===1)return !!U.setup.cat;if(U.setupStep===2)return !!U.setup.dif;if(U.setupStep===3)return !!U.setup.first;return false;}
+async function nextSetup(){if(U.setupStep===0){const el=document.getElementById('setupName');U.setup.name=el?.value.trim()||'';}if(!canNextSetup())return alert('Completá esta opción antes de continuar.');if(U.setupStep<3){U.setupStep++;render();return;}S=createWorld(U.setup);notify('Administración','Partida v0.2 creada y vinculada a tu cuenta.');cloudState='Guardando…';render();await cloudSave();}
+
+function topBar(){const set=playerSet();return `<div class="top"><div class="topin"><div class="brand"><div class="brandlogo">🎭</div><div><b>Carnaval Uruguay</b><small>${set?esc(set.name):'v0.2'}</small></div></div><div class="topright"><span class="cloud" id="cloudState">${cloudState}</span><span class="username muted">@${esc(profile?.username||'')}</span><button class="btn alt small" data-act="logout">Salir</button></div></div></div>`;}
+function nav(){const items=['Inicio','Plantilla','Mercado','Conjuntos','Calendario','Espectáculo','Actualidad','Bandeja','Actualizaciones'];return `<div class="nav">${items.map(v=>`<button data-act="view" data-view="${v}" class="${U.view===v?'on':''}">${v}${v==='Bandeja'&&unread()?`<span class="badge">${unread()}</span>`:''}</button>`).join('')}</div>`;}
+function gameView(){
+  const set=playerSet();
+  let body='';
+  if(U.view==='Inicio')body=renderHome();if(U.view==='Plantilla')body=renderRoster();if(U.view==='Mercado')body=renderMarket();if(U.view==='Conjuntos')body=renderSets();if(U.view==='Calendario')body=renderCalendar();if(U.view==='Espectáculo')body=renderSpectacle();if(U.view==='Actualidad')body=renderNews();if(U.view==='Bandeja')body=renderInbox();if(U.view==='Actualizaciones')body=renderUpdates();
+  APP.innerHTML=`${topBar()}<div class="wrap">${nav()}${body}</div>${renderModal()}`;
+}
+function render(){if(!session)return authView();if(!S)return setupView();gameView();}
