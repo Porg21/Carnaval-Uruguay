@@ -8,8 +8,8 @@ function createWorld(setup){
   sets.forEach(set=>{
     const weak=set.isPlayer;
     const n=rosterSize(set.category);
-    set.roster=Array.from({length:n},()=>makeArtist(set.category,{weak,tenure:weak?rand(1,3):rand(1,9)}));
-    set.roster.forEach((a,i)=>{a.setId=set.id;a.status='Plantel';a.starter=set.isPlayer?i<starterTarget(set.category):false;a.history=[{year:2026,set:set.name,category:set.category}];});
+    set.roster=Array.from({length:n},()=>makeArtist(set.category,{weak,tenure:weak?1:rand(1,9)}));
+    set.roster.forEach((a,i)=>{a.setId=set.id;a.status='Plantel';a.starter=set.isPlayer?i<starterTarget(set.category):false;a.history=[{year:set.isPlayer?2027:2026,set:set.name,category:set.category}];});
     set.awards=deriveAwards(set.history);
   });
 
@@ -20,7 +20,7 @@ function createWorld(setup){
       const eligible=professionals.filter(p=>p.type===type && p.assignments.length<5 && !p.assignments.some(a=>a.category===set.category));
       let p=(!set.isPlayer && eligible.length && Math.random()<.42)?pick(eligible):makeProfessional(type,{weak:set.isPlayer});
       if(!professionals.some(x=>x.id===p.id))professionals.push(p);
-      const tenure=set.isPlayer?rand(1,3):rand(1,10), chemistry=chemistryForYears(tenure);
+      const tenure=set.isPlayer?1:rand(1,10), chemistry=chemistryForYears(tenure);
       p.assignments.push({setId:set.id,category:set.category,tenure,chemistry,contract:makeDemands(p.rating)});
       p.history.push({set:set.name,category:set.category,fromYear:2027-tenure+1});
       set.professionalIds.push(p.id);
