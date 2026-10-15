@@ -36,8 +36,8 @@ function createWorld(setup){
   return {
     version:'0.2',year:2027,cal:{m:0,w:1,globalWeek:1},playerSetId,replacedName,
     settings:{difficulty:setup.dif,firstSeason:setup.first},
-    player:{money:DIF[setup.dif],rubrics:initialRub,works,plan:{},contracts:{},lastReports:[]},
-    sets,professionals,freeArtists,favorites:{artists:[],professionals:[]},news:[{id:id(),week:1,text:`${setup.name} inicia su proyecto en ${setup.cat}.`}],
+    player:{money:DIF[setup.dif],rubrics:initialRub,works,plan:{},contracts:{},lastReports:[],lastFinance:null},
+    sets,professionals,freeArtists,favorites:{artists:[],professionals:[]},news:[{id:id(),week:1,year:2027,text:`${setup.name} inicia su proyecto en ${setup.cat}.`}],
     notifications:{Mercado:[],Plantel:[],Competición:[],Administración:[]}
   };
 }
