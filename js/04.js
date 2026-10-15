@@ -2,7 +2,7 @@ function createWorld(setup){
   const sets=[];
   Object.entries(NAMES).forEach(([cat,names])=>names.forEach(name=>sets.push({id:id(),name,category:cat,prestige:rand(25,92),popularity:rand(20,92),budget:rand(180000,1250000),style:pick(['Apuesta por jóvenes','Busca figuras','Austero','Equilibrado','Gastador']),roster:[],professionalIds:[],history:randomHistory(cat),awards:[],spectacleSeed:rand(55,94),isPlayer:false})));
   const candidates=sets.filter(x=>x.category===setup.cat).sort((a,b)=>a.prestige-b.prestige).slice(0,4);
-  const replaced=pick(candidates), playerSetId=replaced.id;
+  const replaced=pick(candidates), playerSetId=replaced.id, replacedName=replaced.name;
   replaced.name=setup.name; replaced.isPlayer=true; replaced.prestige=18; replaced.popularity=14; replaced.budget=DIF[setup.dif]; replaced.style='Jugador'; replaced.history=[]; replaced.awards=[];
 
   sets.forEach(set=>{
@@ -34,7 +34,7 @@ function createWorld(setup){
   const initialRub={}; RUBRICS.forEach((r,i)=>initialRub[r]=[42,40,38,36,39,31][i]);
   const works={'Voces / Musicalidad':39,'Textos / Interpretación':38,'Puesta en escena':36,'Coreografía / Bailes':35,'Vestuario / Maquillaje':38};
   return {
-    version:'0.2',year:2027,cal:{m:0,w:1,globalWeek:1},playerSetId,replacedName:candidates.find(c=>c.id===playerSetId)?.name||'',
+    version:'0.2',year:2027,cal:{m:0,w:1,globalWeek:1},playerSetId,replacedName,
     settings:{difficulty:setup.dif,firstSeason:setup.first},
     player:{money:DIF[setup.dif],rubrics:initialRub,works,plan:{},contracts:{},lastReports:[]},
     sets,professionals,freeArtists,favorites:{artists:[],professionals:[]},news:[{id:id(),week:1,text:`${setup.name} inicia su proyecto en ${setup.cat}.`}],
