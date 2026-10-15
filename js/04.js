@@ -9,7 +9,7 @@ function createWorld(setup){
     const weak=set.isPlayer;
     const n=rosterSize(set.category);
     set.roster=Array.from({length:n},()=>makeArtist(set.category,{weak,tenure:weak?1:rand(1,9)}));
-    set.roster.forEach((a,i)=>{a.setId=set.id;a.status='Plantel';a.starter=set.isPlayer?i<starterTarget(set.category):false;a.history=[{year:set.isPlayer?2027:2026,set:set.name,category:set.category}];});
+    set.roster.forEach((a,i)=>{a.setId=set.id;a.status='Plantel';a.starter=set.isPlayer?i<starterTarget(set.category):false;a.contract=makeDemands(a.rating);a.history=[{year:set.isPlayer?2027:2026,set:set.name,category:set.category}];});
     set.awards=deriveAwards(set.history);
   });
 
