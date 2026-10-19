@@ -46,6 +46,7 @@ function v3SetRoster(set,weak){
   if(/Bail|Vedette/i.test(a.role))a.attrs.Baile=clamp(a.attrs.Baile||a.rating,1,100);
   if(/Tambor/.test(a.role)){a.attrs.Percusión=clamp(a.attrs.Percusión||a.rating,1,100);['Tambor chico','Tambor piano','Tambor repique'].forEach(function(t){a.attrs[t]=a.attrs[t]||clamp(a.rating+rand(-16,16),10,100);});}
   if(!a.contract)a.contract=makeDemands(a.rating);
+  if(weak&&a.contract)a.contract.salary=Math.round(a.contract.salary*.65);
   set.roster.push(a);
  }
  if(!set.utileros)set.utileros=set.isPlayer?[]:Array.from({length:rand(1,5)},function(){return {id:id(),name:pick(FN)+' '+pick(LN),since:rand(2015,2027)};});
@@ -75,7 +76,7 @@ function v3InitWorld(s){
  });
  // Se mantienen los tres modos económicos, ajustando el fondo inicial al costo de los planteles grandes.
  var n=v3Slots(playerSet().category).length;
- if(n>26){s.player.money=Math.round(s.player.money*n/22);playerSet().budget=s.player.money;}
+ if(n>26){s.player.money=Math.round(s.player.money*Math.pow(n/17,1.55));playerSet().budget=s.player.money;}
  return s;
 }
 const v2CreateWorld=createWorld;
