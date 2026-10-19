@@ -31,6 +31,7 @@ function v3Artist(cat,role,weak,tenure){
  if(/Actor|Director escénico|Gramillero|Mama Vieja/i.test(role)){a.attrs.Actuación=clamp(Math.round(a.rating+rand(-4,16)),10,100);}
  if(/Cantante|Primo|Segundo/i.test(role)){a.attrs.Canto=clamp(Math.round(a.rating+rand(-4,17)),10,100);}
  if(/Tambor|Bombo|Platillos|Redoblante/i.test(role)){a.attrs.Percusión=clamp(Math.round(a.rating+rand(-5,15)),10,100);}
+ if(role.startsWith('Tambor ')){['Tambor chico','Tambor piano','Tambor repique'].forEach(function(t){a.attrs[t]=clamp(a.rating+rand(-15,17),10,100);});}
  return a;
 }
 function v3SetRoster(set,weak){
@@ -43,7 +44,7 @@ function v3SetRoster(set,weak){
   if(weak){a.tenure=1;a.chemistry=0;}
   if(v3IsMusic(a.role))a.attrs.Musicalidad=clamp(a.attrs.Musicalidad||a.rating,1,100);
   if(/Bail|Vedette/i.test(a.role))a.attrs.Baile=clamp(a.attrs.Baile||a.rating,1,100);
-  if(/Tambor/.test(a.role))a.attrs.Percusión=clamp(a.attrs.Percusión||a.rating,1,100);
+  if(/Tambor/.test(a.role)){a.attrs.Percusión=clamp(a.attrs.Percusión||a.rating,1,100);['Tambor chico','Tambor piano','Tambor repique'].forEach(function(t){a.attrs[t]=a.attrs[t]||clamp(a.rating+rand(-16,16),10,100);});}
   if(!a.contract)a.contract=makeDemands(a.rating);
   set.roster.push(a);
  }
@@ -68,7 +69,7 @@ function v3InitWorld(s){
  Object.entries(V3_MORE_NAMES).forEach(function(entry){entry[1].forEach(function(name){s.sets.push(v3NewAISet(entry[0],name));});});
  Object.keys(CAT).forEach(function(cat){
   var freeRoles=v3Slots(cat);
-  freeRoles.forEach(function(role){if(Math.random()<.45){var a=v3Artist(cat,role,false,0);a.setId=null;a.status='Libre';a.starter=false;a.contract=null;s.freeArtists.push(a);}});
+  [...new Set(freeRoles)].forEach(function(role){for(var i=0;i<2;i++){var a=v3Artist(cat,role,false,0);a.setId=null;a.status='Libre';a.starter=false;a.contract=null;s.freeArtists.push(a);}});
  });
  // Se mantienen los tres modos económicos, ajustando el fondo inicial al costo de los planteles grandes.
  var n=v3Slots(playerSet().category).length;
@@ -88,10 +89,11 @@ function v3Filled(set){
  return missing;
 }
 function v3Music(set){
- var musicians=set.roster.filter(function(a){return a.starter&&v3IsMusic(a.role);});
- var score=avg(musicians.map(function(a){return artistEffective(a)*(a.attrs.Musicalidad||a.attrs.Percusión||a.rating)/Math.max(1,a.rating);}));
+ var musicians=set.roster.filter(function(a){return a.starter&&v3IsMusic(a.role)&&(set.category!=='Lubolos'||!a.role.startsWith('Tambor '));});
+ var score=avg(musicians.map(function(a){return (a.attrs.Musicalidad||a.attrs.Percusión||a.rating)*(1+(a.chemistry||0)/100);}));
  return musicians.length?one(score):0;
 }
+function v3DrumScore(set){var list=set.roster.filter(function(a){return a.starter&&a.role.startsWith('Tambor ');});return list.length?one(avg(list.map(function(a){return (a.attrs[a.role]||a.attrs.Percusión||a.rating)*(1+(a.chemistry||0)/100);}))):0;}
 function v3Art(set,role){
  var artists=set.roster.filter(function(a){return a.starter&&!v3IsMusic(a.role);});
  var field=role==='Bailarín'?'Baile':role==='Actor'?'Actuación':'Canto';
@@ -99,7 +101,7 @@ function v3Art(set,role){
  artists.forEach(function(a){
   var mainRole=role==='Bailarín'?/Bailarín|Bailarina/.test(a.role):a.role===role;
   var value=(a.attrs[field]||a.rating)*(1+(a.chemistry||0)/100);
-  total+=value*(mainRole?1:.10);if(mainRole)main++;
+  total+=value*(mainRole?1:(set.category==='Parodistas'||set.category==='Humoristas'?.10:0));if(mainRole)main++;
  });
  return main?one(total/main):0;
 }
@@ -107,7 +109,7 @@ const v2SpectacleRating=playerSpectacleRating;
 playerSpectacleRating=function(){
  if(!S)return 0;
  var base=v2SpectacleRating(),set=playerSet(),music=v3Music(set);
- var special=avg([v3Art(set,'Bailarín'),v3Art(set,'Actor'),v3Art(set,'Cantante'),music].filter(function(n){return n>0;}));
+ var special=avg([v3Art(set,'Bailarín'),v3Art(set,'Actor'),v3Art(set,'Cantante'),music,set.category==='Lubolos'?v3DrumScore(set):0].filter(function(n){return n>0;}));
  return Math.round(base*.78+special*.22);
 };
 const v2ToggleStarter=toggleStarter;
