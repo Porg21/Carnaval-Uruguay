@@ -1,4 +1,20 @@
 const PATCHES = [
+  {v:'0.3',title:'Club, finanzas, formaciones fijas y Prueba de Admisión',items:[
+    'Partidas nuevas: se conserva la cuenta de usuario pero las partidas anteriores de v0.2 no se cargan.',
+    'Formaciones titulares fijas por categoría: Murga 17, Parodistas 21, Humoristas 18, Revistas 26 y Lubolos 57.',
+    'Suplentes limitados por categoría y control obligatorio de puestos antes de comenzar diciembre.',
+    'Músicos y batería de murga se valoran con la media de sus instrumentos principales; personajes artísticos mantienen especialidad y aportes secundarios.',
+    'Nuevo Club: aforo, ampliaciones, cantina, precios, stock de merchandising y utileros honoríficos.',
+    'Nueva página Finanzas con desglose semanal de ingresos, gastos y proyección de costos.',
+    'Negociaciones de artistas muestran costo garantizado y costo anual estimado con hipótesis explícitas.',
+    'Avanzar semana desde Inicio, con aviso de ensayos pendientes y confirmación de cierre.',
+    'Festivales limitados a dos por semana de abril a noviembre y siete de diciembre a enero; pueden compartir día con ensayos.',
+    'Nombre del espectáculo editable hasta diciembre; obligatorio para comenzar enero.',
+    'Prueba de Admisión con mínimo de 45 inscriptos, sorteo equilibrado en octubre, jornadas en noviembre y veinte clasificados.',
+    'Actuaciones con comentarios sin puntuaciones y resultados revelados uno por uno en orden alfabético.',
+    'Tras quedar eliminado podés seguir actuando con menos ingresos o pausar hasta abril sin ingresos ni gastos; hay riesgo de perder artistas y profesionales.',
+    'Se amplía el calendario a febrero y marzo para permitir avanzar a la siguiente temporada; el Concurso Oficial completo se desarrollará en una próxima versión.'
+  ]},
   {v:'0.2',title:'Cuentas, mundo vivo y gestión profunda',items:[
     'Cuentas reales con nombre de usuario, email privado y contraseña; guardado de partida en la nube.',
     'Nueva sección Conjuntos, dividida por las cinco categorías del Carnaval.',
