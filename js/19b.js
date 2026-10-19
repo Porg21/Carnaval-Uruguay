@@ -96,7 +96,14 @@ const v2RenderRoster=renderRoster;
 renderRoster=function(){
  var set=playerSet(),missing=v3Filled(set),max=rosterSize(set.category);
  var block='<div class="card" style="margin-bottom:12px"><h3>Formación titular obligatoria</h3><p class="muted">Titulares '+set.roster.filter(function(a){return a.starter;}).length+'/'+starterTarget(set.category)+' · Plantel '+set.roster.length+'/'+max+' · Suplentes máximos '+V3_SUBS[set.category]+'</p><div class="stats">'+V3_FORMATIONS[set.category].map(function(row){var have=set.roster.filter(function(a){return a.starter&&a.role===row[0];}).length;return '<div class="stat"><span>'+esc(row[0])+'</span><b style="'+(have<row[1]?'color:#e8a763':'')+'">'+have+' / '+row[1]+'</b></div>';}).join('')+'</div>'+(missing.length?'<div class="note warn">Faltan '+missing.map(function(x){return x.need+' '+x.role;}).join(', ')+'. Debés completar la formación antes de comenzar diciembre.</div>':'<div class="note success">Formación completa.</div>')+'</div>';
- return block+v2RenderRoster();
+ var drums='';
+ if(set.category==='Lubolos'){
+  var roles=['Tambor chico','Tambor piano','Tambor repique'];
+  drums='<div class="card" style="margin-bottom:12px"><h3>Cuerda de tambores · '+v3DrumScore(set)+' puntos</h3><p class="muted">12 tamborileros: 6 chicos, 4 pianos y 2 repiques. Si cambiás un tambor, se intercambia con otro titular para conservar las proporciones.</p><div class="grid">'+set.roster.filter(function(a){return a.starter&&a.role.startsWith('Tambor ');}).map(function(a){
+   return '<div class="field"><label>'+esc(a.name)+'</label><select data-v3-drum="'+a.id+'">'+roles.map(function(role){return '<option value="'+role+'" '+(a.role===role?'selected':'')+'>'+role+' · '+(a.attrs[role]||a.rating)+'</option>';}).join('')+'</select></div>';
+  }).join('')+'</div></div>';
+ }
+ return block+drums+v2RenderRoster();
 };
 const v2RenderHome=renderHome;
 renderHome=function(){
