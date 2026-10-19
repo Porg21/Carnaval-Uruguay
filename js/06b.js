@@ -3,7 +3,7 @@ async function loadUserData(){
   const profileResult=await sb.from('profiles').select('id,username,created_at').eq('id',session.user.id).maybeSingle();
   const gameResult=await sb.from('game_saves').select('state,version,updated_at').eq('user_id',session.user.id).maybeSingle();
   profile=profileResult.data||{username:session.user.user_metadata?.username||'Jugador'};
-  S=gameResult.data?.state||null;
+  S=gameResult.data?.version==='0.3'&&gameResult.data?.state?.version==='0.3'?gameResult.data.state:null;
   cloudState=S?'Guardado':'Sin partida';
   render();
 }
