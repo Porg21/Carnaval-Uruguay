@@ -4,6 +4,7 @@ const v2ClubAction=v3ClubAction;
 v3ClubAction=function(action,button){
  var before=S.player.money;
  v2ClubAction(action,button);
+ playerSet().utileros=S.player.club.utileros;
  S.player.pendingCosts=(S.player.pendingCosts||0)+Math.max(0,before-S.player.money);
  queueSave();
 };
