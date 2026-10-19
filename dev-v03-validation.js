@@ -470,3 +470,600 @@ function suggestedCounter(e,round){const d=e.demands,disc=Math.min(.1,(round-1)*
 function readOffer(){const q=k=>Number(document.getElementById(`offer-${k}`)?.value||0);return {salary:q('salary'),tablado:q('tablado'),teatro:q('teatro'),bonus:q('bonus'),febPct:q('febPct')};}
 async function sendOffer(){const n=U.negotiation,e=n.kind==='artists'?artistById(n.entityId):proById(n.entityId);n.offer=readOffer();if(offerScore(n.offer,e.demands)>=.94){completeHire(e,n.kind,n.offer);U.modal=null;U.negotiation=null;await cloudSave();render();return;}n.counter=suggestedCounter(e,n.round);n.message=`${e.name} no acepta. Te propone estas condiciones para continuar.`;n.round++;render();}
 function renderNegotiation(){const n=U.negotiation,e=n.kind==='artists'?artistById(n.entityId):proById(n.entityId),o=n.offer,c=n.counter;const replace=n.kind==='professionals'&&playerSet().professionalIds.map(proById).some(p=>p?.type===e.type);return `<div class="modal"><div class="modalhead"><div><div class="kicker">Negociación · ronda ${n.round}</div><h2>${esc(e.name)}</h2><p class="muted">${n.kind==='artists'?`${e.category} · ${esc(e.role)}`:esc(e.type)}</p></div><button class="x" data-act="close-modal">×</button></div>${replace?`<div class="note warn">Ya tenés un profesional de ${esc(e.type)}. Si llegás a un acuerdo, reemplazará al actual en tu conjunto.</div>`:''}${n.message?`<div class="note warn" style="margin-top:8px">${esc(n.message)}</div>`:''}<div class="grid"><div class="field"><label>Sueldo mensual</label><input id="offer-salary" type="number" value="${o.salary}"></div><div class="field"><label>Por tablado / evento</label><input id="offer-tablado" type="number" value="${o.tablado}"></div><div class="field"><label>Por Teatro de Verano</label><input id="offer-teatro" type="number" value="${o.teatro}"></div><div class="field"><label>Bono por objetivos</label><input id="offer-bonus" type="number" value="${o.bonus}"></div><div class="field"><label>% ingresos de febrero</label><input id="offer-febPct" type="number" min="0" max="100" value="${o.febPct}"></div></div>${c?`<div class="card" style="margin-top:10px"><h3>Contraoferta solicitada</h3><p class="muted">${money(c.salary)}/mes · ${money(c.tablado)} por tablado · ${money(c.teatro)} por Teatro · bono ${money(c.bonus)} · ${c.febPct}% de febrero.</p><button class="btn green" data-act="accept-counter">Aceptar contraoferta</button></div>`:''}<div class="split" style="margin-top:15px"><button class="btn red" data-act="reject-negotiation">Terminar negociación</button><button class="btn" data-act="send-offer">Enviar ${c?'nueva contraoferta':'oferta'}</button></div></div>`;}
+;
+function completeHire(e,kind,contract){
+  const set=playerSet();
+  if(kind==='artists'){
+    if(e.setId){const old=setById(e.setId);if(old){old.roster=old.roster.filter(a=>a.id!==e.id);e.pastChemistry[old.id]=e.chemistry||0;addNews(`${e.name} dejó ${old.name} y se incorporó a ${set.name}.`);}}
+    else{S.freeArtists=S.freeArtists.filter(a=>a.id!==e.id);addNews(`${set.name} incorporó a ${e.name}.`);}
+    const recovered=Math.floor((e.pastChemistry[set.id]||0)*.5);e.setId=set.id;e.status='Plantel';e.starter=false;e.tenure=1;e.chemistry=recovered;e.contract=contract;e.history.push({year:S.year,set:set.name,category:set.category});set.roster.push(e);notify('Mercado',`Acuerdo cerrado con ${e.name}. Se incorpora como suplente${recovered?` y recupera ${recovered}% de Química`:''}.`);
+  }else{
+    const current=setProfessionals(set).find(p=>p.type===e.type);if(current){const as=assignmentFor(current,set.id);if(as)current.pastChemistry[set.id]=as.chemistry||0;current.assignments=current.assignments.filter(a=>a.setId!==set.id);set.professionalIds=set.professionalIds.filter(pid=>pid!==current.id);}
+    const recovered=Math.floor((e.pastChemistry[set.id]||0)*.5);e.assignments.push({setId:set.id,category:set.category,tenure:1,chemistry:recovered,contract});e.history.push({set:set.name,category:set.category,fromYear:S.year});set.professionalIds.push(e.id);addNews(`${set.name} incorporó a ${e.name} como ${e.type}.`);notify('Mercado',`Acuerdo cerrado con ${e.name}. Concentración actual: ${concentrationFor(e)}%.`);
+  }
+  queueSave();
+}
+;
+function renderModal(){
+  if(!U.modal)return '';
+  let inside='';
+  if(U.modal==='set')inside=renderSetModal(setById(U.selectedSet));
+  if(U.modal==='artist')inside=renderArtistModal(artistById(U.selectedSet));
+  if(U.modal==='pro')inside=renderProModal(proById(U.selectedSet));
+  if(U.modal==='rehearsal')inside=renderRehearsalModal();
+  if(U.modal==='negotiation')inside=renderNegotiation();
+  return `<div class="modalbg">${inside}</div>`;
+}
+;
+
+/* Carnaval Uruguay v0.3: formaciones y mundo persistente */
+const V3_FORMATIONS={
+ Murga:[['Director escénico',1],['Platillos',1],['Bombo',1],['Redoblante',1],['Sobreprimo',2],['Primo',6],['Segundo',5]],
+ Parodistas:[['Bailarín',10],['Actor',4],['Cantante',6],['Tecladista',1]],
+ Humoristas:[['Bailarín',6],['Actor',5],['Cantante',3],['Guitarrista',1],['Bajista',1],['Baterista',1],['Tecladista',1]],
+ Revista:[['Bailarín',5],['Bailarina',5],['Actor',3],['Cantante',6],['Guitarrista',1],['Bajista',1],['Baterista',1],['Tecladista',1],['Saxofonista',1],['Trombonista',1],['Trompetista',1]],
+ Lubolos:[['Tambor chico',6],['Tambor piano',4],['Tambor repique',2],['Bailarina',12],['Bailarín',2],['Portabandera',4],['Gramillero',2],['Mama Vieja',2],['Compañero de Mama Vieja',2],['Vedette',3],['Escobero',1],['Portaestandarte',1],['Actor',4],['Cantante',6],['Guitarrista',1],['Bajista',1],['Tecladista',1],['Saxofonista',1],['Trombonista',1],['Trompetista',1]]
+};
+const V3_SUBS={Murga:4,Parodistas:6,Humoristas:5,Revista:6,Lubolos:18};
+const V3_DIRECT={Murga:10,Parodistas:4,Humoristas:3,Revista:3,Lubolos:4};
+const V3_ADMIT_MIN={Murga:22,Parodistas:6,Humoristas:6,Revista:6,Lubolos:5};
+const V3_QUALIFY={Murga:12,Parodistas:2,Humoristas:2,Revista:2,Lubolos:2};
+const V3_MORE_NAMES={
+ Murga:['La Revuelta','Todo Vuelve','La Peatonal','Los Rebeldes','La Noche Larga','A Media Voz','Los Impropios','Falta y Resto Sur','La Carambola','De Madrugada'],
+ Parodistas:['Los del Ruedo','El Reparto','Los Narradores','Los Imperdibles'],
+ Humoristas:['Los del Chiste','Punto y Aparte','La Risa Sigue','Humor del Puerto'],
+ Revista:['Estrellas del Sur','Sueños de Revista','Marea de Colores','La Pasarela'],
+ Lubolos:['Tambor del Pueblo','Ritmo Sur','Candela Morena']
+};
+Object.keys(V3_FORMATIONS).forEach(function(cat){ROLES[cat]=V3_FORMATIONS[cat].map(function(x){return x[0];});});
+if(MONTHS.length===10){MONTHS.push('Febrero','Marzo');}
+function v3Slots(cat){return V3_FORMATIONS[cat].flatMap(function(e){return Array.from({length:e[1]},function(){return e[0];});});}
+function v3RoleMax(cat,role){return (V3_FORMATIONS[cat].find(function(x){return x[0]===role;})||[role,0])[1];}
+function v3IsMusic(role){return /guitarrista|bajista|baterista|tecladista|saxofonista|trombonista|trompetista|bombo|platillos|redoblante|tambor /i.test(role);}
+function v3Artist(cat,role,weak,tenure){
+ var a=makeArtist(cat,{weak:!!weak,tenure:tenure||1});
+ a.role=role;
+ if(v3IsMusic(role)){a.attrs.Musicalidad=clamp(Math.round(a.rating+rand(-7,13)),10,100);}
+ if(/Bail|Vedette|Escobero/i.test(role)){a.attrs.Baile=clamp(Math.round(a.rating+rand(-5,17)),10,100);}
+ if(/Actor|Director escénico|Gramillero|Mama Vieja/i.test(role)){a.attrs.Actuación=clamp(Math.round(a.rating+rand(-4,16)),10,100);}
+ if(/Cantante|Primo|Segundo/i.test(role)){a.attrs.Canto=clamp(Math.round(a.rating+rand(-4,17)),10,100);}
+ if(/Tambor|Bombo|Platillos|Redoblante/i.test(role)){a.attrs.Percusión=clamp(Math.round(a.rating+rand(-5,15)),10,100);}
+ if(role.startsWith('Tambor ')){['Tambor chico','Tambor piano','Tambor repique'].forEach(function(t){a.attrs[t]=clamp(a.rating+rand(-15,17),10,100);});}
+ return a;
+}
+function v3SetRoster(set,weak){
+ var list=v3Slots(set.category), prior=set.roster||[], skipped=weak?Math.max(2,Math.round(list.length*.11)):0, keep=list.length-skipped;
+ set.roster=[];
+ for(var i=0;i<keep;i++){
+  var a=prior[i]||v3Artist(set.category,list[i],weak,weak?1:rand(1,7));
+  a.role=list[i];a.category=set.category;
+  a.setId=set.id;a.status='Plantel';a.starter=true;
+  if(weak){a.tenure=1;a.chemistry=0;}
+  if(v3IsMusic(a.role))a.attrs.Musicalidad=clamp(a.attrs.Musicalidad||a.rating,1,100);
+  if(/Bail|Vedette/i.test(a.role))a.attrs.Baile=clamp(a.attrs.Baile||a.rating,1,100);
+  if(/Tambor/.test(a.role)){a.attrs.Percusión=clamp(a.attrs.Percusión||a.rating,1,100);['Tambor chico','Tambor piano','Tambor repique'].forEach(function(t){a.attrs[t]=a.attrs[t]||clamp(a.rating+rand(-16,16),10,100);});}
+  if(!a.contract)a.contract=makeDemands(a.rating);
+  set.roster.push(a);
+ }
+ if(!set.utileros)set.utileros=set.isPlayer?[]:Array.from({length:rand(1,5)},function(){return {id:id(),name:pick(FN)+' '+pick(LN),since:rand(2015,2027)};});
+}
+function v3NewAISet(cat,name){
+ var set={id:id(),name:name,category:cat,prestige:rand(18,67),popularity:rand(12,64),budget:rand(250000,1050000),style:pick(['Austero','Equilibrado','Apuesta por jóvenes']),roster:[],professionalIds:[],history:[],awards:[],spectacleSeed:rand(48,85),isPlayer:false,restUntil:0};
+ v3SetRoster(set,false);
+ PRO_TYPES.forEach(function(type){
+  var p=makeProfessional(type);
+  p.assignments.push({setId:set.id,category:cat,tenure:1,chemistry:0,contract:makeDemands(p.rating)});
+  p.history.push({set:name,category:cat,fromYear:S?S.year:2027});
+  S.professionals.push(p);set.professionalIds.push(p.id);
+ });
+ return set;
+}
+function v3InitWorld(s){
+ S=s;s.version='0.3';s.player.financeHistory=[];s.player.club={name:'Club de '+playerSet().name,capacity:30,level:1,cantina:1,foodPrice:160,merchPrice:390,stock:60,construction:0,utileros:[]};
+ playerSet().utileros=s.player.club.utileros;
+ s.player.spectacles={};s.player.spectacles[String(s.year)]='';
+ s.player.admissionChoice=null;s.player.paused=false;
+ s.admission=null;
+ s.sets.forEach(function(set){v3SetRoster(set,set.isPlayer);set.restUntil=0;set.qualifiedDirect=false;});
+ Object.entries(V3_MORE_NAMES).forEach(function(entry){entry[1].forEach(function(name){s.sets.push(v3NewAISet(entry[0],name));});});
+ Object.keys(CAT).forEach(function(cat){
+  var freeRoles=v3Slots(cat);
+  [...new Set(freeRoles)].forEach(function(role){for(var i=0;i<2;i++){var a=v3Artist(cat,role,false,0);a.setId=null;a.status='Libre';a.starter=false;a.contract=null;s.freeArtists.push(a);}});
+ });
+ // Se mantienen los tres modos económicos, ajustando el fondo inicial al costo de los planteles grandes.
+ var n=v3Slots(playerSet().category).length;
+ if(n>26){s.player.money=Math.round(s.player.money*n/22);playerSet().budget=s.player.money;}
+ return s;
+}
+const v2CreateWorld=createWorld;
+createWorld=function(setup){return v3InitWorld(v2CreateWorld(setup));};
+rosterSize=function(cat){return v3Slots(cat).length+V3_SUBS[cat];};
+starterTarget=function(cat){return v3Slots(cat).length;};
+function v3Filled(set){
+ var missing=[];
+ V3_FORMATIONS[set.category].forEach(function(row){
+  var have=set.roster.filter(function(a){return a.starter&&a.role===row[0];}).length;
+  if(have<row[1])missing.push({role:row[0],need:row[1]-have});
+ });
+ return missing;
+}
+function v3Music(set){
+ var musicians=set.roster.filter(function(a){return a.starter&&v3IsMusic(a.role)&&(set.category!=='Lubolos'||!a.role.startsWith('Tambor '));});
+ var score=avg(musicians.map(function(a){return (a.attrs.Musicalidad||a.attrs.Percusión||a.rating)*(1+(a.chemistry||0)/100);}));
+ return musicians.length?one(score):0;
+}
+function v3DrumScore(set){var list=set.roster.filter(function(a){return a.starter&&a.role.startsWith('Tambor ');});return list.length?one(avg(list.map(function(a){return (a.attrs[a.role]||a.attrs.Percusión||a.rating)*(1+(a.chemistry||0)/100);}))):0;}
+function v3Art(set,role){
+ var artists=set.roster.filter(function(a){return a.starter&&!v3IsMusic(a.role);});
+ var field=role==='Bailarín'?'Baile':role==='Actor'?'Actuación':'Canto';
+ var total=0,main=0;
+ artists.forEach(function(a){
+  var mainRole=role==='Bailarín'?/Bailarín|Bailarina/.test(a.role):a.role===role;
+  var value=(a.attrs[field]||a.rating)*(1+(a.chemistry||0)/100);
+  total+=value*(mainRole?1:((set.category==='Parodistas'||set.category==='Humoristas')?0.10:0));if(mainRole)main++;
+ });
+ return main?one(total/main):0;
+}
+const v2SpectacleRating=playerSpectacleRating;
+playerSpectacleRating=function(){
+ if(!S)return 0;
+ var base=v2SpectacleRating(),set=playerSet(),music=v3Music(set);
+ var special=avg([v3Art(set,'Bailarín'),v3Art(set,'Actor'),v3Art(set,'Cantante'),music,set.category==='Lubolos'?v3DrumScore(set):0].filter(function(n){return n>0;}));
+ return Math.round(base*.78+special*.22);
+};
+const v2ToggleStarter=toggleStarter;
+toggleStarter=function(aid){
+ var a=artistById(aid),set=playerSet();if(!a||a.setId!==set.id)return;
+ if(!a.starter){
+  var same=set.roster.filter(function(x){return x.starter&&x.role===a.role;});
+  var allowed=v3RoleMax(set.category,a.role);if(!allowed)return alert('Ese rol no existe en la formación titular.');
+  if(same.length>=allowed){var other=same[same.length-1];other.starter=false;notify('Plantel',other.name+' pasó a suplente para dejar lugar a '+a.name+'.');}
+ }
+ v2ToggleStarter(aid);
+};
+const v2CompleteHire=completeHire;
+completeHire=function(e,kind,contract){
+ if(kind==='artists'){
+  if(e.category!==playerSet().category)return alert('Solo podés incorporar artistas de la categoría de tu conjunto.');
+  if(playerSet().roster.length>=rosterSize(e.category))return alert('Plantilla completa. Liberá un suplente para incorporar a otro artista.');
+  if(!v3RoleMax(e.category,e.role))return alert('Este artista no tiene un puesto compatible con la formación.');
+ }
+ return v2CompleteHire(e,kind,contract);
+};
+
+;
+
+/* Carnaval Uruguay v0.3: club, finanzas, calendario y contratos */
+function v3FinanceTotals(){
+ var set=playerSet();
+ var artists=Math.round(set.roster.reduce(function(n,a){return n+(Number(a.contract?.salary)||0)/4.33;},0));
+ var pros=Math.round(setProfessionals(set).reduce(function(n,p){return n+(Number(assignmentFor(p,set.id)?.contract?.salary)||0)/4.33;},0));
+ return {artists:artists,pros:pros,total:artists+pros};
+}
+function v3ClubEventRevenue(rehearsals){
+ var club=S.player.club;
+ var income=0,cost=0,attendees=0,food=0,merch=0;
+ rehearsals.forEach(function(){
+  var draw=clamp(Math.round(playerSet().popularity*.9+rand(0,18)),5,Math.max(5,club.capacity));
+  if(S.player.admissionChoice==='continue'&&S.admission?.eliminated)draw=Math.round(draw*.5);
+  var crowd=Math.min(club.capacity,draw);
+  var foodSales=Math.round(crowd*clamp(1.2-club.foodPrice/430,.08,.88)*clamp(.6+club.cantina*.15,.2,1));
+  var merchSales=Math.min(club.stock,Math.round(crowd*clamp(.38-club.merchPrice/1700,.015,.28)));
+  attendees+=crowd;food+=foodSales*club.foodPrice;merch+=merchSales*club.merchPrice;
+  cost+=Math.round(foodSales*club.foodPrice*.42);club.stock-=merchSales;
+ });
+ income=food+merch;
+ return {income:income,cost:cost,attendees:attendees,food:food,merch:merch};
+}
+function renderFinances(){
+ var rows=S.player.financeHistory||[],f=v3FinanceTotals(),club=S.player.club;
+ return '<div class="hero"><div class="kicker">Gestión económica</div><h1>Finanzas</h1><p class="muted">Historial real de ingresos y gastos. Los importes de cada semana quedan registrados al cerrarla.</p><div class="stats"><div class="stat"><span>Saldo disponible</span><b>'+money(S.player.money)+'</b></div><div class="stat"><span>Sueldos de artistas / semana</span><b>'+money(f.artists)+'</b></div><div class="stat"><span>Profesionales / semana</span><b>'+money(f.pros)+'</b></div><div class="stat"><span>Gasto fijo mensual aprox.</span><b>'+money(f.total*4.33)+'</b></div></div></div>'
+ +'<div class="card"><h2>Proyección de caja</h2><p class="muted">Estimación solo con los sueldos actuales, sin contar futuros eventos ni ventas.</p><div class="stats">'+[1,2,3].map(function(n){return '<div class="stat"><span>En '+n+' mes'+(n>1?'es':'')+'</span><b>'+money(S.player.money-n*f.total*4.33)+'</b></div>';}).join('')+'</div></div>'
+ +'<div class="card" style="margin-top:12px"><h2>Historial semanal</h2>'+(!rows.length?'<div class="empty">Todavía no cerraste ninguna semana en esta versión.</div>':rows.slice().reverse().map(function(r){
+ return '<details class="row" style="display:block"><summary style="cursor:pointer"><b>'+esc(r.month)+' · semana '+r.week+' · '+r.year+'</b><span class="pill '+(r.net>=0?'green':'')+'" style="margin-left:10px">'+(r.net>=0?'+':'')+money(r.net)+'</span><small>Ingresos '+money(r.income)+' · Gastos '+money(r.expenses)+' · Saldo '+money(r.closing)+'</small></summary><div style="padding:12px"><div>Festivales / tablados: '+money(r.festivals)+'</div><div>Cantina: '+money(r.food)+'</div><div>Merchandising: '+money(r.merch)+'</div><div>Sueldos de artistas: −'+money(r.artists)+'</div><div>Profesionales: −'+money(r.pros)+'</div><div>Insumos del club / alquiler: −'+money(r.other)+'</div></div></details>';
+ }).join(''))+'</div>';
+}
+function renderClub(){
+ var c=S.player.club;
+ return '<div class="hero"><div class="kicker">Patrimonio del conjunto</div><h1>'+esc(c.name)+'</h1><p class="muted">Tu club empieza con capacidad para 30 espectadores. Los integrantes del conjunto no consumen estos cupos. Administrá la cantina y el merchandising.</p><div class="stats"><div class="stat"><span>Aforo de público</span><b>'+c.capacity+'</b></div><div class="stat"><span>Cantina · nivel</span><b>'+c.cantina+'</b></div><div class="stat"><span>Stock de merchandising</span><b>'+c.stock+'</b></div><div class="stat"><span>Ampliación</span><b>'+(c.construction?c.construction+' semanas':'Disponible')+'</b></div></div></div>'
+ +'<div class="grid"><div class="card"><h2>Instalaciones</h2><p class="muted">Ampliar aumenta la capacidad para asistentes a los ensayos abiertos. La obra demora 4 semanas.</p><div class="note">Capacidad actual: '+c.capacity+' · próximo nivel: '+(c.capacity+30)+' · costo '+money(v3UpgradeCost())+'</div><button class="btn" data-act="club-expand" '+(c.construction?'disabled':'')+'>Ampliar club</button><div class="split" style="margin-top:12px"><div><b>Cantina nivel '+c.cantina+'</b><p class="muted">Aumenta la capacidad de atención.</p></div><button class="btn alt small" data-act="club-cantina" '+(c.cantina>=6?'disabled':'')+'>Mejorar '+money(18000*c.cantina)+'</button></div></div>'
+ +'<div class="card"><h2>Precios y ventas</h2><div class="field"><label>Nombre del club</label><input id="club-name" maxlength="60" value="'+esc(c.name)+'"></div><div class="field"><label>Precio promedio comida y bebida ($)</label><input id="club-food" type="number" min="20" max="5000" value="'+c.foodPrice+'"></div><div class="field"><label>Precio merchandising ($)</label><input id="club-merch" type="number" min="40" max="9000" value="'+c.merchPrice+'"></div><button class="btn" data-act="club-save">Guardar configuración</button><div class="split" style="margin-top:15px"><div><b>Stock: '+c.stock+' productos</b><p class="muted">Comprar 30 unidades cuesta '+money(30*150)+'.</p></div><button class="btn alt small" data-act="club-stock">Comprar stock</button></div><p class="muted" style="margin-top:10px">Precios muy altos pueden reducir las ventas. Cada ensayo abierto registra lo recaudado en Finanzas.</p></div></div>'
+ +'<div class="card" style="margin-top:12px"><h2>Utileros honoríficos</h2><p class="muted">No reciben sueldo ni ocupan lugares de la plantilla. Podés incorporar tantos como quieras.</p><div class="split"><input id="utilero-name" maxlength="70" placeholder="Nombre y apellido"><button class="btn" data-act="utilero-add">Agregar</button></div>'+(c.utileros.length?c.utileros.map(function(u){return '<div class="row"><b>'+esc(u.name)+'</b><button class="btn red small" data-act="utilero-remove" data-id="'+esc(u.id)+'">Quitar</button></div>';}).join(''):'<div class="empty">Todavía no hay utileros registrados.</div>')+'</div>';
+}
+function v3UpgradeCost(){return 35000*S.player.club.level;}
+function v3ClubAction(action,elem){
+ var c=S.player.club,v=Number;
+ if(action==='club-save'){var name=document.getElementById('club-name').value.trim();if(!name)return alert('El club necesita un nombre.');c.name=name.slice(0,60);c.foodPrice=clamp(v(document.getElementById('club-food').value)||160,20,5000);c.merchPrice=clamp(v(document.getElementById('club-merch').value)||390,40,9000);}
+ if(action==='club-expand'){var amount=v3UpgradeCost();if(c.construction)return;if(S.player.money<amount)return alert('No alcanza el dinero para esta obra.');if(!confirm('¿Invertir '+money(amount)+' en ampliar el club? La obra tardará 4 semanas.'))return;S.player.money-=amount;c.construction=4;c.level++;notify('Administración','Comenzaron las obras de ampliación del club.');}
+ if(action==='club-cantina'){var cost=18000*c.cantina;if(c.cantina>=6)return;if(S.player.money<cost)return alert('Dinero insuficiente.');S.player.money-=cost;c.cantina++;}
+ if(action==='club-stock'){if(S.player.money<4500)return alert('Dinero insuficiente.');S.player.money-=4500;c.stock+=30;}
+ if(action==='utilero-add'){var input=document.getElementById('utilero-name'),name=input.value.trim();if(name.length<2)return alert('Ingresá el nombre del utilero.');c.utileros.push({id:id(),name:name.slice(0,70),since:S.year});}
+ if(action==='utilero-remove')c.utileros=c.utileros.filter(function(u){return u.id!==elem.dataset.id;});
+ playerSet().budget=S.player.money;queueSave();render();
+}
+function v3FestivalMax(){return S.cal.m<8?2:7;}
+function renderCalendar(){
+ var events=currentWeekEvents(),ens=events.filter(function(x){return x.type==='ensayo';}),fest=events.filter(function(x){return x.type==='festival'||x.type==='tablado';});
+ var rest=S.cal.m>=10?'Actividades de cierre de temporada':S.cal.m<7?'1–2 ensayos recomendados':'4–5 ensayos recomendados';
+ return '<div class="hero"><div class="split"><div><div class="kicker">Planificación semanal</div><h1>'+monthNow()+' · semana '+S.cal.w+'</h1><p class="muted">'+rest+'. Podés programar un ensayo y un festival el mismo día.</p></div><button class="btn" data-act="advance-week">Avanzar semana</button></div><span class="pill gold">Ensayos '+ens.length+'/'+maxRehearsals()+'</span> <span class="pill">Festivales / tablados '+fest.length+'/'+v3FestivalMax()+'</span></div>'
+ +'<div class="week" style="margin-top:12px">'+DAYS.map(function(day,i){var today=events.filter(function(x){return x.day===i;}),hasEns=today.some(function(x){return x.type==='ensayo';}),hasFest=today.some(function(x){return x.type==='festival'||x.type==='tablado';});
+ return '<div class="day"><b>'+day+'</b>'+today.map(function(e){return '<div class="chip">'+(e.type==='ensayo'?'Ensayo · '+e.parts.map(esc).join(' / '):(e.type==='tablado'?'Tablado: ':'Festival: ')+esc(e.host)+' · '+money(e.pay))+'</div><button class="btn red small" style="margin-top:6px" data-act="remove-event" data-id="'+e.id+'">Quitar</button>';}).join('')+'<div style="display:grid;gap:6px;margin-top:8px"><button class="btn alt small" data-act="plan-rehearsal" data-day="'+i+'" '+(hasEns||ens.length>=maxRehearsals()?'disabled':'')+'>+ Ensayo</button><button class="btn alt small" data-act="plan-festival" data-day="'+i+'" '+(hasFest||fest.length>=v3FestivalMax()?'disabled':'')+'>+ '+(S.cal.m>=10?'Tablado':'Festival')+'</button></div></div>';
+ }).join('')+'</div>';
+}
+saveRehearsal=function(){
+ var parts=U.rehearsal.parts,cost=parts.reduce(function(n,p){return n+(p==='Ensayo completo'?2:1);},0),ev=currentWeekEvents();
+ if(cost!==3)return;
+ if(ev.some(function(x){return x.day===U.rehearsal.day&&x.type==='ensayo';}))return alert('Ya hay un ensayo ese día.');
+ if(ev.filter(function(x){return x.type==='ensayo';}).length>=maxRehearsals())return alert('Máximo de ensayos alcanzado.');
+ ev.push({id:id(),type:'ensayo',day:U.rehearsal.day,parts:parts.slice()});S.player.plan[S.cal.globalWeek]=ev;U.modal=null;queueSave();render();
+};
+planFestival=function(day){
+ var ev=currentWeekEvents(),count=ev.filter(function(x){return x.type==='festival'||x.type==='tablado';}).length;
+ if(count>=v3FestivalMax())return alert('Alcanzaste el máximo de '+v3FestivalMax()+' festivales/tablados de esta semana.');
+ if(ev.some(function(x){return x.day===day&&(x.type==='festival'||x.type==='tablado');}))return alert('Ese día ya hay un festival o tablado.');
+ var hosts=S.sets.filter(function(s){return !s.isPlayer&&s.category===playerSet().category;});
+ var low=S.admission?.eliminated;
+ ev.push({id:id(),type:S.cal.m>=10?'tablado':'festival',day:day,host:pick(hosts)?.name||'Evento de Carnaval',pay:Math.round(rand(9000,26000)*(low?.55:1)),pop:rand(1,3),rent:Math.round(rand(1000,3500)*(S.cal.m>=8?1.4:1))});
+ S.player.plan[S.cal.globalWeek]=ev;queueSave();render();
+};
+function v3ContractEstimate(o){
+ // Supuestos visibles, no obligaciones: 12 eventos, 2 actuaciones de Teatro, 50% bono y $100.000 de ingresos de febrero.
+ var guaranteed=12*(Number(o.salary)||0);
+ var variable=12*(Number(o.tablado)||0)+2*(Number(o.teatro)||0)+.5*(Number(o.bonus)||0)+100000*(Number(o.febPct)||0)/100;
+ return {guaranteed:Math.round(guaranteed),estimated:Math.round(guaranteed+variable)};
+}
+const v2RenderNegotiation=renderNegotiation;
+renderNegotiation=function(){
+ var html=v2RenderNegotiation();
+ if(!U.negotiation||U.negotiation.kind!=='artists')return html;
+ var cost=v3ContractEstimate(U.negotiation.offer);
+ var block='<div class="card" style="margin-top:12px"><h3>Costo anual del contrato</h3><div class="stats"><div class="stat"><span>Costo garantizado</span><b id="contract-guaranteed">'+money(cost.guaranteed)+'</b></div><div class="stat"><span>Costo anual estimado</span><b id="contract-estimated">'+money(cost.estimated)+'</b></div></div><p class="muted">Proyección anual: 12 sueldos, 12 tablados/eventos, 2 actuaciones de Teatro, 50% del bono y base hipotética de $100.000 de ingresos en febrero. Los importes variables no están garantizados.</p></div>';
+ return html.replace('<div class="split" style="margin-top:15px">',block+'<div class="split" style="margin-top:15px">');
+};
+APP.addEventListener('input',function(e){
+ if(!e.target.id||!e.target.id.startsWith('offer-')||!U.negotiation||U.negotiation.kind!=='artists')return;
+ var o={};['salary','tablado','teatro','bonus','febPct'].forEach(function(k){o[k]=Number(document.getElementById('offer-'+k)?.value||0);});
+ var x=v3ContractEstimate(o),g=document.getElementById('contract-guaranteed'),t=document.getElementById('contract-estimated');
+ if(g)g.textContent=money(x.guaranteed);if(t)t.textContent=money(x.estimated);
+});
+const v2RenderRoster=renderRoster;
+renderRoster=function(){
+ var set=playerSet(),missing=v3Filled(set),max=rosterSize(set.category);
+ var block='<div class="card" style="margin-bottom:12px"><h3>Formación titular obligatoria</h3><p class="muted">Titulares '+set.roster.filter(function(a){return a.starter;}).length+'/'+starterTarget(set.category)+' · Plantel '+set.roster.length+'/'+max+' · Suplentes máximos '+V3_SUBS[set.category]+'</p><div class="stats">'+V3_FORMATIONS[set.category].map(function(row){var have=set.roster.filter(function(a){return a.starter&&a.role===row[0];}).length;return '<div class="stat"><span>'+esc(row[0])+'</span><b style="'+(have<row[1]?'color:#e8a763':'')+'">'+have+' / '+row[1]+'</b></div>';}).join('')+'</div>'+(missing.length?'<div class="note warn">Faltan '+missing.map(function(x){return x.need+' '+x.role;}).join(', ')+'. Debés completar la formación antes de comenzar diciembre.</div>':'<div class="note success">Formación completa.</div>')+'</div>';
+ var drums='';
+ if(set.category==='Lubolos'){
+  var roles=['Tambor chico','Tambor piano','Tambor repique'];
+  drums='<div class="card" style="margin-bottom:12px"><h3>Cuerda de tambores · '+v3DrumScore(set)+' puntos</h3><p class="muted">12 tamborileros: 6 chicos, 4 pianos y 2 repiques. Si cambiás un tambor, se intercambia con otro titular para conservar las proporciones.</p><div class="grid">'+set.roster.filter(function(a){return a.starter&&a.role.startsWith('Tambor ');}).map(function(a){
+   return '<div class="field"><label>'+esc(a.name)+'</label><select data-v3-drum="'+a.id+'">'+roles.map(function(role){return '<option value="'+role+'" '+(a.role===role?'selected':'')+'>'+role+' · '+(a.attrs[role]||a.rating)+'</option>';}).join('')+'</select></div>';
+  }).join('')+'</div></div>';
+ }
+ return block+drums+v2RenderRoster();
+};
+const v2RenderHome=renderHome;
+renderHome=function(){
+ var block='<div class="card" style="margin-top:12px;margin-bottom:12px"><div class="split"><div><h3>Semana actual</h3><p class="muted">Ensayos programados: '+currentWeekEvents().filter(function(e){return e.type==='ensayo';}).length+'. Antes de avanzar, revisá el calendario.</p></div><div class="actions"><button class="btn alt" data-act="view" data-view="Calendario">Calendario</button><button class="btn" data-act="advance-week">Avanzar semana</button></div></div></div>';
+ return v2RenderHome().replace('<div class="grid">',block+'<div class="grid">');
+};
+const v2RenderSpectacle=renderSpectacle;
+renderSpectacle=function(){
+ var name=S.player.spectacles[String(S.year)]||'',locked=S.cal.m>=9;
+ var edit='<div class="card" style="margin-bottom:12px"><h3>Espectáculo de '+S.year+'</h3><p class="muted">'+(locked?'El nombre quedó fijado al comenzar enero.':'Podés cambiar el nombre del espectáculo hasta el final de diciembre.')+'</p><div class="split"><input id="spectacle-name" maxlength="90" value="'+esc(name)+'" placeholder="Nombre del espectáculo" '+(locked?'disabled':'')+'><button class="btn" data-act="spectacle-save" '+(locked?'disabled':'')+'>Guardar nombre</button></div></div>';
+ return edit+v2RenderSpectacle();
+};
+
+;
+
+/* Carnaval Uruguay v0.3: Prueba de Admisión, permanencia del mundo y decisiones */
+function v3Shuffle(a){var out=a.slice();for(var i=out.length-1;i>0;i--){var j=rand(0,i),v=out[i];out[i]=out[j];out[j]=v;}return out;}
+function v3EnsureAdmissions(){
+ Object.keys(V3_ADMIT_MIN).forEach(function(cat){
+  var needed=V3_ADMIT_MIN[cat]+V3_DIRECT[cat]-S.sets.filter(function(s){return s.category===cat;}).length;
+  for(var i=0;i<needed;i++){var n='La Nueva '+CAT[cat].label+' '+(S.year%100)+'-'+i;S.sets.push(v3NewAISet(cat,n));}
+ });
+}
+
+function v3RepairAI(){
+ S.sets.filter(function(set){return !set.isPlayer;}).forEach(function(set){
+  v3Filled(set).forEach(function(need){
+   for(var i=0;i<need.need;i++){
+    var bench=set.roster.find(function(a){return !a.starter&&a.role===need.role;});
+    if(bench){bench.starter=true;continue;}
+    var a=v3Artist(set.category,need.role,false,1);
+    a.setId=set.id;a.status='Plantel';a.starter=true;a.contract=makeDemands(a.rating);a.history=[{year:S.year,set:set.name,category:set.category}];
+    set.roster.push(a);
+   }
+  });
+  while(set.roster.length>rosterSize(set.category)){
+   var bench=set.roster.find(function(a){return !a.starter;});if(!bench)break;
+   set.roster=set.roster.filter(function(a){return a.id!==bench.id;});
+   bench.setId=null;bench.status='Libre';bench.contract=null;S.freeArtists.push(bench);
+  }
+ });
+}
+
+function v3PrepareAdmission(){
+ v3EnsureAdmissions();v3RepairAI();
+ var directIds=[],entries=[];
+ Object.keys(V3_ADMIT_MIN).forEach(function(cat){
+  var group=S.sets.filter(function(s){return s.category===cat;});
+  var direct=group.slice().sort(function(a,b){
+   var ap=a.qualifiedDirect?250:0,bp=b.qualifiedDirect?250:0;
+   if(a.isPlayer&&S.year===2027&&S.settings.firstSeason==='Directo al Carnaval')ap=1000;
+   if(b.isPlayer&&S.year===2027&&S.settings.firstSeason==='Directo al Carnaval')bp=1000;
+   return bp+aiSetPower(b)-ap-aiSetPower(a);
+  }).slice(0,V3_DIRECT[cat]);
+  direct.forEach(function(x){directIds.push(x.id);});
+  var pool=v3Shuffle(group.filter(function(x){return !directIds.includes(x.id);}));
+  var active=pool.filter(function(x){return x.isPlayer||!x.restUntil||x.restUntil<=S.year;});
+  var extras=Math.min(active.length-V3_ADMIT_MIN[cat],S.year===2027?0:rand(0,6));
+  var chosen=active.slice(0,V3_ADMIT_MIN[cat]+Math.max(0,extras));
+  if(chosen.length<V3_ADMIT_MIN[cat]){
+   pool.forEach(function(x){if(chosen.length<V3_ADMIT_MIN[cat]&&!chosen.includes(x))chosen.push(x);});
+  }
+  if(playerSet().category===cat&&!direct.some(function(x){return x.isPlayer;})&&!chosen.some(function(x){return x.isPlayer;})){
+   if(chosen.length)chosen[chosen.length-1]=playerSet();else chosen.push(playerSet());
+  }
+  chosen.forEach(function(set){entries.push({setId:set.id,category:cat,name:set.name,day:0,order:0,score:null,feedback:'',performed:false,qualified:false});});
+ });
+ var number=entries.length,nights=Math.ceil(number/5);
+ var lengths=Array.from({length:nights},function(_,i){return i<number-4*nights?5:4;});
+ var groups={};Object.keys(V3_ADMIT_MIN).forEach(function(cat){groups[cat]=v3Shuffle(entries.filter(function(e){return e.category===cat;}));});
+ var arranged=[],nightCats={};
+ for(var d=0;d<nights;d++){
+  var used={},target=lengths[d];
+  for(var pos=0;pos<target;pos++){
+   var options=Object.keys(groups).filter(function(k){return groups[k].length>0;}).sort(function(a,b){
+    var pa=used[a]||0,pb=used[b]||0;
+    return pa-pb||groups[b].length-groups[a].length;
+   });
+   var key=options[0];if(!key)continue;
+   var item=groups[key].pop();item.day=d+1;item.order=pos+1;used[key]=(used[key]||0)+1;arranged.push(item);
+  }
+  nightCats[d+1]=used;
+ }
+ S.admission={year:S.year,entries:arranged,nights:nights,directIds:directIds,finished:false,reveal:0,eliminated:false,qualified:false,results:[],choice:null};
+ notify('Competición','Sorteo de la Prueba de Admisión: '+number+' conjuntos distribuidos en '+nights+' jornadas. Consultá la pestaña Admisión.');
+ addNews('Se realizó en octubre el sorteo de la Prueba de Admisión '+S.year+'. '+number+' conjuntos buscan 20 cupos.');
+}
+function v3AdmissionComment(score){
+ if(score>=87)return 'Gran actuación: el público destacó la solidez del espectáculo y la respuesta fue muy entusiasta.';
+ if(score>=76)return 'Buena presentación, con momentos destacados en el escenario y una recepción favorable del público.';
+ if(score>=64)return 'Actuación irregular: algunos pasajes convencieron, pero quedaron aspectos por pulir.';
+ if(score>=52)return 'Hubo momentos interesantes, aunque se notaron problemas de ejecución y coordinación.';
+ return 'Una presentación difícil, con escasa respuesta del público y varias dificultades sobre el escenario.';
+}
+function v3PerformAdmission(){
+ var adm=S.admission;if(!adm||adm.finished||S.cal.m!==7)return;
+ var lastDay=Math.ceil(adm.nights*S.cal.w/4);
+ adm.entries.forEach(function(e){
+  if(e.performed||e.day>lastDay)return;
+  var set=setById(e.setId);if(!set)return;
+  e.score=clamp(Math.round((set.isPlayer?playerSpectacleRating():aiSetPower(set))+rand(-9,9)),10,120);
+  e.performed=true;e.feedback=v3AdmissionComment(e.score);
+ });
+ if(S.cal.w===4){
+  var qualified=[];
+  Object.keys(V3_QUALIFY).forEach(function(cat){
+   var group=adm.entries.filter(function(x){return x.category===cat;}).sort(function(a,b){return b.score-a.score;});
+   group.slice(0,V3_QUALIFY[cat]).forEach(function(e){e.qualified=true;qualified.push(e);});
+  });
+  adm.results=qualified.sort(function(a,b){return a.category.localeCompare(b.category,'es')||a.name.localeCompare(b.name,'es');}).map(function(e){return {id:e.setId,name:e.name,category:e.category};});
+  adm.finished=true;
+  var participant=adm.entries.find(function(e){return e.setId===S.playerSetId;});
+  adm.qualified=!!participant?.qualified||adm.directIds.includes(S.playerSetId);
+  adm.eliminated=!!participant&&!participant.qualified;
+  addNews('Terminó la Prueba de Admisión. Se conocerán los 20 clasificados en la Noche de Resultados.');
+  U.modal='admission-results';
+ }
+}
+function v3RenderAdmission(){
+ var adm=S.admission;if(!adm)return '<div class="card"><h2>Prueba de Admisión</h2><p class="muted">El sorteo se realiza en octubre. Las actuaciones son en noviembre.</p></div>';
+ var items=adm.entries;
+ var body='<div class="hero"><div class="kicker">Prueba de Admisión '+adm.year+'</div><h1>'+items.length+' conjuntos · '+adm.nights+' jornadas</h1><p class="muted">El sorteo reparte las categorías. Cada jornada tiene cuatro o cinco actuaciones. Se anuncian los clasificados recién después de la última noche.</p></div>';
+ if(adm.finished)body+='<div class="card" style="margin-top:12px"><h3>Noche de Resultados</h3><button class="btn" data-act="admission-results-open">Ver clasificados uno por uno</button></div>';
+ for(var day=1;day<=adm.nights;day++){
+  body+='<div class="card" style="margin-top:12px"><h3>Jornada '+day+'</h3>'+items.filter(function(e){return e.day===day;}).sort(function(a,b){return a.order-b.order;}).map(function(e){
+   return '<div class="row"><div><b>'+e.order+'. '+esc(e.name)+(e.setId===S.playerSetId?' · Tu conjunto':'')+'</b><small>'+CAT[e.category].label+' · '+(e.performed?'Actuación realizada':'Pendiente')+'</small>'+(e.performed?'<p class="muted">'+esc(e.feedback)+'</p>':'')+'</div></div>';
+  }).join('')+'</div>';
+ }
+ return body;
+}
+function v3AdmissionModal(){
+ var adm=S.admission;if(!adm)return '';
+ var total=adm.results.length,shown=adm.reveal;
+ var visible=adm.results.slice(0,shown);
+ var body='<div class="modal wide"><div class="modalhead"><div><div class="kicker">Noviembre · '+adm.year+'</div><h2>Noche de Resultados de Admisión</h2><p class="muted">Clasificados en orden alfabético, sin puntajes ni posiciones.</p></div><button class="x" data-act="admission-close">×</button></div><div class="note">Anunciados '+shown+' de '+total+' clasificados</div>'
+ +'<div style="max-height:45vh;overflow:auto">'+visible.map(function(e,i){return '<div class="row"><b>'+(i+1)+'. '+esc(e.name)+'</b><span class="pill gold">'+CAT[e.category].label+'</span></div>';}).join('')+'</div>';
+ if(shown<total)body+='<button class="btn" style="margin-top:14px" data-act="admission-reveal">Anunciar siguiente conjunto</button>';
+ else{
+  body+='<div class="note '+(adm.eliminated?'warn':'success')+'" style="margin-top:12px">'+(adm.eliminated?'Tu conjunto no clasificó al Concurso Oficial. Podés continuar actuando con menos invitaciones o pausar hasta abril.':'¡Resultado completado! '+(adm.qualified?'Tu conjunto tiene lugar en el Carnaval.':'Ya están definidos los 20 conjuntos clasificados.'))+'</div>';
+  if(adm.eliminated&&!adm.choice)body+='<div class="split" style="margin-top:14px"><button class="btn alt" data-act="admission-continue">Continuar temporada</button><button class="btn" data-act="admission-pause">Pausar sin ingresos ni gastos hasta abril</button></div>';
+  else body+='<button class="btn" style="margin-top:14px" data-act="admission-close">Cerrar resultados</button>';
+ }
+ return body+'</div>';
+}
+function v3FindReceiver(cat){
+ var targets=S.sets.filter(function(s){return !s.isPlayer&&s.category===cat&&s.roster.length<rosterSize(cat);});
+ if(S.admission)targets=targets.filter(function(s){return S.admission.directIds.includes(s.id)||S.admission.results.some(function(r){return r.id===s.id;});});
+ return targets.length?pick(targets):null;
+}
+function v3MoveArtist(a){
+ var set=playerSet(),target=v3FindReceiver(set.category);
+ set.roster=set.roster.filter(function(x){return x.id!==a.id;});
+ a.pastChemistry[set.id]=a.chemistry||0;a.chemistry=0;a.tenure=0;a.starter=false;
+ if(target){target.roster.push(a);a.setId=target.id;a.status='Plantel';a.contract=makeDemands(a.rating);a.history.push({year:S.year,set:target.name,category:target.category});}
+ else{a.setId=null;a.status='Libre';a.contract=null;S.freeArtists.push(a);}
+ return target?.name||'el mercado de libres';
+}
+function v3MoveProfessional(p){
+ var set=playerSet(),as=assignmentFor(p,set.id);
+ if(!as)return '';
+ p.pastChemistry[set.id]=as.chemistry||0;
+ p.assignments=p.assignments.filter(function(x){return x.setId!==set.id;});
+ set.professionalIds=set.professionalIds.filter(function(x){return x!==p.id;});
+ var target=S.sets.find(function(s){return !s.isPlayer&&s.category===set.category&&S.admission?.results.some(function(r){return r.id===s.id;})&&!s.professionalIds.some(function(i){return proById(i)?.type===p.type;});});
+ if(target&&p.assignments.length<5&&!p.assignments.some(function(x){return x.category===target.category;})){
+  p.assignments.push({setId:target.id,category:target.category,tenure:1,chemistry:0,contract:makeDemands(p.rating)});
+  target.professionalIds.push(p.id);p.history.push({year:S.year,set:target.name,category:target.category});
+ }
+ return target?.name||'el mercado de profesionales';
+}
+function v3ContinueDepartures(){
+ if(!S.admission?.eliminated||S.admission.choice!=='continue'||S.cal.m<8)return;
+ var set=playerSet();
+ if(Math.random()<.14&&set.roster.length){
+  var a=pick(set.roster),offer=Math.round((a.contract?.salary||a.demands.salary)*1.24);
+  var stay=confirm(a.name+' recibió una propuesta de un conjunto clasificado. ¿Querés intentar retenerlo ofreciendo '+money(offer)+'/mes?');
+  if(stay&&Math.random()<.52){a.contract={...(a.contract||a.demands),salary:offer};notify('Mercado',a.name+' aceptó tu mejora salarial y seguirá en el conjunto.');}
+  else{var dest=v3MoveArtist(a);notify('Plantel',a.name+' se marchó a '+dest+'.');}
+ }
+ if(Math.random()<.025&&set.professionalIds.length){var p=pick(setProfessionals(set));if(p){var destino=v3MoveProfessional(p);notify('Plantel',p.name+' dejó el cuerpo creativo por '+destino+'.');}}
+}
+function v3SkipToApril(){
+ if(!S.admission?.eliminated)return;
+ var departed=[],set=playerSet();
+ set.roster.slice().forEach(function(a){
+  var loyalty=clamp((a.tenure||1)*.025,0,.24);
+  if(Math.random()<.34-loyalty)departed.push(a.name+' → '+v3MoveArtist(a));
+ });
+ setProfessionals(set).slice().forEach(function(p){if(Math.random()<.22)departed.push(p.name+' → '+v3MoveProfessional(p));});
+ S.player.admissionChoice='pause';S.admission.choice='pause';
+ var lastMoney=S.player.money;
+ S.cal.m=0;S.cal.w=1;S.cal.globalWeek+=Math.max(1,16);
+ S.year++;annualChemistry();v3NewSeason();
+ S.player.money=lastMoney;playerSet().budget=lastMoney;
+ notify('Administración','Pausa hasta abril completada: sin ingresos ni gastos. Salieron '+departed.length+' integrantes.'+(departed.length?' '+departed.join('; '):''));
+ U.modal=null;U.view='Inicio';queueSave();render();
+}
+function v3NewSeason(){
+ if(S.player.club.construction){S.player.club.capacity+=30;S.player.club.construction=0;}
+ S.player.spectacles[String(S.year)]='';
+ S.player.admissionChoice=null;S.admission=null;
+ // Conjuntos nuevos pueden entrar al mundo; los anteriores nunca se eliminan.
+ var count=rand(2,6);
+ for(var i=0;i<count;i++){var cat=pick(Object.keys(CAT)),name='Nueva '+CAT[cat].label+' '+S.year+' · '+(i+1);S.sets.push(v3NewAISet(cat,name));}
+ S.sets.forEach(function(set){
+  if(set.isPlayer)return;
+  if(Math.random()<.055)set.restUntil=S.year+rand(1,5);
+  // La condición de clasificación directa se recalcula según evolución deportiva.
+  set.qualifiedDirect=false;
+ });
+ notify('Administración','Comienza la temporada '+S.year+'. Los conjuntos inactivos pueden regresar y aparecen nuevos proyectos.');
+}
+
+;
+
+/* Carnaval Uruguay v0.3: avance temporal e integración de pantallas */
+const v2ClubAction=v3ClubAction;
+v3ClubAction=function(action,button){
+ var before=S.player.money;
+ v2ClubAction(action,button);
+ S.player.pendingCosts=(S.player.pendingCosts||0)+Math.max(0,before-S.player.money);
+ queueSave();
+};
+advanceWeek=async function(){
+ var events=currentWeekEvents(),rehearsals=events.filter(function(x){return x.type==='ensayo';});
+ var festivals=events.filter(function(x){return x.type==='festival'||x.type==='tablado';});
+ if(S.admission?.eliminated&&!S.admission.choice&&S.cal.m>=8){
+  U.modal='admission-results';render();return;
+ }
+ if(S.cal.m===8&&S.cal.w===4&&!(S.player.spectacles[String(S.year)]||'').trim()){
+  alert('No podés comenzar enero sin ponerle nombre al espectáculo. Andá a Espectáculo, elegí el nombre y guardalo.');
+  U.view='Espectáculo';render();return;
+ }
+ if(S.cal.m===7&&S.cal.w===4){
+  var missing=v3Filled(playerSet());
+  if(missing.length){alert('No podés comenzar diciembre: faltan puestos titulares. '+missing.map(function(x){return x.need+' '+x.role;}).join(', '));U.view='Plantilla';render();return;}
+ }
+ if(!rehearsals.length){
+  if(!confirm('No programaste ensayos esta semana. ¿Querés avanzar igual? Podés ir a Calendario para organizarlos.')){U.view='Calendario';render();return;}
+ }
+ var ledger=v3FinanceTotals(),estimatedIncome=festivals.reduce(function(n,e){return n+e.pay;},0);
+ if(!confirm('Resumen semanal: '+rehearsals.length+' ensayo(s), '+festivals.length+' festival(es)/tablado(s), pagos por '+money(estimatedIncome)+', sueldos aproximados de '+money(ledger.total)+'. ¿Cerrar semana?'))return;
+ var year=S.year,month=monthNow(),week=S.cal.w;
+ S.player.lastReports=rehearsals.map(processRehearsal);
+ var focused=new Set(rehearsals.flatMap(function(r){return r.parts.filter(function(p){return p!=='Ensayo completo';});}));
+ Object.keys(S.player.works).forEach(function(area){if(!focused.has(area))S.player.rubrics[area]=clamp(one(S.player.rubrics[area]-.08),0,130);});
+ if(!rehearsals.some(function(r){return r.parts.includes('Ensayo completo');}))S.player.rubrics['Rodaje general']=clamp(one(S.player.rubrics['Rodaje general']-.05),0,130);
+ var activity=festivals.reduce(function(n,e){return n+(Number(e.pay)||0);},0);
+ festivals.forEach(function(e){playerSet().popularity=clamp(playerSet().popularity+(e.pop||0),0,100);});
+ var sales=S.cal.m>=7?v3ClubEventRevenue(rehearsals):{income:0,cost:0,attendees:0,food:0,merch:0};
+ var rent=festivals.reduce(function(n,e){return n+(Number(e.rent)||0);},0);
+ var pending=S.player.pendingCosts||0;
+ var paidCosts=ledger.total+sales.cost+rent;
+ var income=activity+sales.income,expense=paidCosts+pending,net=income-expense;
+ S.player.money+=income-paidCosts;playerSet().budget=S.player.money;
+ S.player.lastFinance={income:Math.round(income),expenses:Math.round(expense),net:Math.round(net)};
+ S.player.financeHistory.push({year:year,month:month,week:week,opening:Math.round(S.player.money-net),closing:Math.round(S.player.money),festivals:Math.round(activity),food:Math.round(sales.food),merch:Math.round(sales.merch),artists:ledger.artists,pros:ledger.pros,other:Math.round(sales.cost+rent+pending),income:Math.round(income),expenses:Math.round(expense),net:Math.round(net)});
+ S.player.pendingCosts=0;
+ addNews('Semana cerrada: '+(net>=0?'+':'')+money(net)+' · '+rehearsals.length+' ensayos · '+festivals.length+' eventos.');
+ passiveProfessionalProgress();
+ if(S.cal.m===7)v3PerformAdmission();
+ v3ContinueDepartures();
+ simulateWorld();
+ if(S.player.club.construction>0){
+  S.player.club.construction--;
+  if(!S.player.club.construction){S.player.club.capacity+=30;notify('Administración','Terminó la ampliación del club. Nueva capacidad: '+S.player.club.capacity+' espectadores.');}
+ }
+ S.cal.globalWeek++;S.cal.w++;
+ if(S.cal.w>4){
+  S.cal.w=1;S.cal.m++;
+  if(S.cal.m>=12){S.cal.m=0;S.year++;annualChemistry();v3NewSeason();}
+  else if(S.cal.m===6){v3PrepareAdmission();}
+  else if(S.cal.m===7)notify('Competición','Comenzó noviembre. Se están disputando las jornadas de Admisión.');
+  else if(S.cal.m===8)notify('Competición','Comenzó diciembre. Revisá el resultado de la Prueba de Admisión.');
+  else if(S.cal.m===9)notify('Competición','Comenzó enero. El nombre del espectáculo quedó fijado y ya podés ver estimaciones de rivales.');
+  else if(S.cal.m===10)notify('Competición','Comenzó febrero. En esta versión los eventos son un prototipo; la simulación completa del Concurso Oficial llegará en una actualización posterior.');
+ }
+ U.view='Inicio';
+ await cloudSave();render();
+};
+const v2GameView=gameView;
+const v2Nav=nav;
+nav=function(){
+ var result=v2Nav();
+ return result.replace('</div>', '<button data-act="view" data-view="Finanzas" class="'+(U.view==='Finanzas'?'on':'')+'">Finanzas</button><button data-act="view" data-view="Club" class="'+(U.view==='Club'?'on':'')+'">Club</button><button data-act="view" data-view="Admisión" class="'+(U.view==='Admisión'?'on':'')+'">Admisión</button></div>');
+};
+gameView=function(){
+ if(['Finanzas','Club','Admisión'].includes(U.view)){
+  var body=U.view==='Finanzas'?renderFinances():U.view==='Club'?renderClub():v3RenderAdmission();
+  APP.innerHTML=topBar()+'<div class="wrap">'+nav()+body+'</div>'+renderModal();
+  return;
+ }
+ return v2GameView();
+};
+const v2RenderModal=renderModal;
+renderModal=function(){return U.modal==='admission-results'?'<div class="modalbg">'+v3AdmissionModal()+'</div>':v2RenderModal();};
+const v2RenderSetModal=renderSetModal;
+renderSetModal=function(set){
+ var h=v2RenderSetModal(set);
+ if(set.utileros?.length){h=h.replace('<div class="grid">','<div class="note">Utileros honoríficos: '+set.utileros.map(function(x){return esc(x.name);}).join(', ')+'</div><div class="grid">');}
+ if(set.isPlayer){
+  var name=S.player.spectacles[String(S.year)]||'Todavía sin nombre';
+  h=h.replace('<div class="grid">','<div class="note">Espectáculo '+S.year+': <b>'+esc(name)+'</b> · Club: '+esc(S.player.club.name)+'</div><div class="grid">');
+ }
+ return h;
+};
+
+APP.addEventListener('change',function(ev){
+ var aid=ev.target.dataset?.v3Drum;if(!aid)return;
+ var a=artistById(aid),newRole=ev.target.value,set=playerSet();
+ if(!a||a.setId!==set.id||!a.starter||!a.role.startsWith('Tambor '))return;
+ if(a.role===newRole)return;
+ var other=set.roster.find(function(x){return x.starter&&x.role===newRole&&x.id!==a.id;});
+ if(!other){alert('No hay un tamborilero de ese instrumento con quien intercambiar.');render();return;}
+ var previous=a.role;a.role=other.role;other.role=previous;
+ notify('Plantel','Se intercambiaron los tambores de '+a.name+' y '+other.name+'.');
+ queueSave();render();
+});
+APP.addEventListener('click',function(ev){
+ var b=ev.target.closest('[data-act]');if(!b)return;
+ var a=b.dataset.act;
+ if(['club-save','club-expand','club-cantina','club-stock','utilero-add','utilero-remove'].includes(a)){v3ClubAction(a,b);return;}
+ if(a==='spectacle-save'){var el=document.getElementById('spectacle-name');if(S.cal.m>=9)return;var name=el?.value.trim()||'';if(name.length<2)return alert('Elegí un nombre de al menos dos caracteres.');S.player.spectacles[String(S.year)]=name.slice(0,90);queueSave();render();return;}
+ if(a==='admission-results-open'){S.admission.reveal=0;U.modal='admission-results';render();return;}
+ if(a==='admission-reveal'){S.admission.reveal=Math.min(20,S.admission.reveal+1);render();return;}
+ if(a==='admission-close'){U.modal=null;render();return;}
+ if(a==='admission-continue'){S.admission.choice='continue';S.player.admissionChoice='continue';U.modal=null;notify('Administración','Continuarás la temporada sin disputar el Concurso Oficial. Menor público e invitaciones.');queueSave();render();return;}
+ if(a==='admission-pause'){if(confirm('¿Pausar hasta abril? No habrá ingresos ni gastos, pero varios componentes y profesionales pueden marcharse.'))v3SkipToApril();return;}
+});
