@@ -48,6 +48,7 @@ function v3SetRoster(set,weak){
   if(!a.contract)a.contract=makeDemands(a.rating);
   set.roster.push(a);
  }
+ if(!set.utileros)set.utileros=set.isPlayer?[]:Array.from({length:rand(1,5)},function(){return {id:id(),name:pick(FN)+' '+pick(LN),since:rand(2015,2027)};});
 }
 function v3NewAISet(cat,name){
  var set={id:id(),name:name,category:cat,prestige:rand(18,67),popularity:rand(12,64),budget:rand(250000,1050000),style:pick(['Austero','Equilibrado','Apuesta por jóvenes']),roster:[],professionalIds:[],history:[],awards:[],spectacleSeed:rand(48,85),isPlayer:false,restUntil:0};
@@ -62,6 +63,7 @@ function v3NewAISet(cat,name){
 }
 function v3InitWorld(s){
  S=s;s.version='0.3';s.player.financeHistory=[];s.player.club={name:'Club de '+playerSet().name,capacity:30,level:1,cantina:1,foodPrice:160,merchPrice:390,stock:60,construction:0,utileros:[]};
+ playerSet().utileros=s.player.club.utileros;
  s.player.spectacles={};s.player.spectacles[String(s.year)]='';
  s.player.admissionChoice=null;s.player.paused=false;
  s.admission=null;
