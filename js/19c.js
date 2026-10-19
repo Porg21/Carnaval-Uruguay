@@ -7,8 +7,28 @@ function v3EnsureAdmissions(){
   for(var i=0;i<needed;i++){var n='La Nueva '+CAT[cat].label+' '+(S.year%100)+'-'+i;S.sets.push(v3NewAISet(cat,n));}
  });
 }
+
+function v3RepairAI(){
+ S.sets.filter(function(set){return !set.isPlayer;}).forEach(function(set){
+  v3Filled(set).forEach(function(need){
+   for(var i=0;i<need.need;i++){
+    var bench=set.roster.find(function(a){return !a.starter&&a.role===need.role;});
+    if(bench){bench.starter=true;continue;}
+    var a=v3Artist(set.category,need.role,false,1);
+    a.setId=set.id;a.status='Plantel';a.starter=true;a.contract=makeDemands(a.rating);a.history=[{year:S.year,set:set.name,category:set.category}];
+    set.roster.push(a);
+   }
+  });
+  while(set.roster.length>rosterSize(set.category)){
+   var bench=set.roster.find(function(a){return !a.starter;});if(!bench)break;
+   set.roster=set.roster.filter(function(a){return a.id!==bench.id;});
+   bench.setId=null;bench.status='Libre';bench.contract=null;S.freeArtists.push(bench);
+  }
+ });
+}
+
 function v3PrepareAdmission(){
- v3EnsureAdmissions();
+ v3EnsureAdmissions();v3RepairAI();
  var directIds=[],entries=[];
  Object.keys(V3_ADMIT_MIN).forEach(function(cat){
   var group=S.sets.filter(function(s){return s.category===cat;});
