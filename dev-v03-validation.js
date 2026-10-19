@@ -266,3 +266,116 @@ function updateCloudLabel(){
   const el=document.getElementById('cloudState');
   if(el)el.textContent=cloudState;
 }
+;
+async function loadUserData(){
+  if(!session)return;
+  const profileResult=await sb.from('profiles').select('id,username,created_at').eq('id',session.user.id).maybeSingle();
+  const gameResult=await sb.from('game_saves').select('state,version,updated_at').eq('user_id',session.user.id).maybeSingle();
+  profile=profileResult.data||{username:session.user.user_metadata?.username||'Jugador'};
+  S=gameResult.data?.version==='0.3'&&gameResult.data?.state?.version==='0.3'?gameResult.data.state:null;
+  cloudState=S?'Guardado':'Sin partida';
+  render();
+}
+async function init(){
+  APP.innerHTML='<div class="authwrap"><div class="auth"><div class="empty">Cargando Carnaval Uruguay…</div></div></div>';
+  const sessionResult=await sb.auth.getSession();
+  session=sessionResult.data.session;
+  if(session)await loadUserData();else render();
+  sb.auth.onAuthStateChange(async(_event,newSession)=>{
+    session=newSession;
+    if(!session){profile=null;S=null;render();}
+  });
+}
+;
+function authView(){
+  const reg=U.authMode==='register';
+  APP.innerHTML=`<div class="authwrap"><div class="auth"><div class="logo">🎭</div><h1>Carnaval Uruguay</h1><p class="muted">Simulador de gestión del Carnaval uruguayo · v0.2</p>
+  <div class="seg"><button data-act="auth-tab" data-mode="login" class="${!reg?'on':''}">Ingresar</button><button data-act="auth-tab" data-mode="register" class="${reg?'on':''}">Crear cuenta</button></div>
+  ${U.authError?`<div class="note danger">${esc(U.authError)}</div>`:''}
+  <form id="authForm">
+    <div class="field"><label>Usuario</label><input name="username" minlength="3" maxlength="24" autocomplete="username" required placeholder="Porg21"></div>
+    ${reg?`<div class="field"><label>Email privado</label><input name="email" type="email" autocomplete="email" required placeholder="tu@email.com"><small>Se guarda asociado a tu cuenta y no se muestra públicamente.</small></div>`:''}
+    <div class="field"><label>Contraseña</label><input name="password" type="password" minlength="6" autocomplete="${reg?'new-password':'current-password'}" required></div>
+    <button class="btn" style="width:100%;margin-top:8px" ${U.authBusy?'disabled':''}>${U.authBusy?'Procesando…':reg?'Crear cuenta':'Ingresar'}</button>
+  </form>
+  <div class="note" style="margin-top:12px">Tu partida de v0.2 se guarda online y queda vinculada a esta cuenta. Las partidas locales de v0.1 no se importan.</div></div></div>`;
+}
+async function submitAuth(form){
+  const fd=new FormData(form),username=String(fd.get('username')||'').trim(),password=String(fd.get('password')||''),email=String(fd.get('email')||'').trim();
+  U.authBusy=true;U.authError='';render();
+  try{
+    const res=await fetch(AUTH_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY},body:JSON.stringify({action:U.authMode==='register'?'register':'login',username,password,email})});
+    const data=await res.json();if(!res.ok)throw new Error(data.error||'No se pudo iniciar sesión.');
+    const {error}=await sb.auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});if(error)throw error;
+    session=(await sb.auth.getSession()).data.session;profile={username:data.profile?.username||username};S=null;await loadUserData();
+  }catch(e){U.authError=e.message||'Ocurrió un error.';}
+  U.authBusy=false;render();
+}
+;
+function setupView(){
+  const s=U.setup;let body='';
+  if(U.setupStep===0)body=`<h2>Creá tu conjunto</h2><div class="field"><label>Nombre del conjunto</label><input id="setupName" value="${esc(s.name)}" placeholder="Ej.: La Nueva Noche"></div>`;
+  if(U.setupStep===1)body=`<h2>Elegí categoría</h2><div class="choices">${Object.entries(CAT).map(([k,c])=>`<button class="choice ${s.cat===k?'on':''}" data-act="setup-cat" data-val="${k}"><b>${c.icon} ${c.label}</b><small>${c.count} conjuntos · ${c.liguilla} pasan a Liguilla.</small></button>`).join('')}</div>`;
+  if(U.setupStep===2)body=`<h2>Economía inicial</h2><div class="choices">${Object.entries(DIF).map(([k,v])=>`<button class="choice ${s.dif===k?'on':''}" data-act="setup-dif" data-val="${k}"><b>${k}</b><small>${money(v)}. El plantel siempre empieza flojo.</small></button>`).join('')}</div>`;
+  if(U.setupStep===3)body=`<h2>Primera temporada</h2><div class="choices">${['Dar Prueba de Admisión','Directo al Carnaval'].map(k=>`<button class="choice ${s.first===k?'on':''}" data-act="setup-first" data-val="${k}"><b>${k}</b><small>${k.startsWith('Dar')?'En noviembre disputarás la Prueba de Admisión.':'Tenés lugar asegurado en febrero solamente el primer año.'}</small></button>`).join('')}</div>`;
+  APP.innerHTML=`<div class="wrap setup"><div class="hero"><div class="kicker">Nueva partida · v0.3</div><h1 style="margin-top:5px">Carnaval Uruguay</h1><p class="muted">Hola, ${esc(profile?.username||'Jugador')}. Esta partida se guardará en la nube.</p>${body}<div class="split" style="margin-top:16px"><button class="btn alt" data-act="setup-back" ${U.setupStep===0?'disabled':''}>Atrás</button><span class="muted">Paso ${U.setupStep+1} de 4</span><button class="btn" data-act="setup-next">${U.setupStep===3?'Empezar temporada':'Siguiente'}</button></div></div></div>`;
+}
+function canNextSetup(){if(U.setupStep===0)return U.setup.name.trim().length>=2;if(U.setupStep===1)return !!U.setup.cat;if(U.setupStep===2)return !!U.setup.dif;if(U.setupStep===3)return !!U.setup.first;return false;}
+async function nextSetup(){if(U.setupStep===0){const el=document.getElementById('setupName');U.setup.name=el?.value.trim()||'';}if(!canNextSetup())return alert('Completá esta opción antes de continuar.');if(U.setupStep<3){U.setupStep++;render();return;}S=createWorld(U.setup);notify('Administración','Partida v0.3 creada y vinculada a tu cuenta.');cloudState='Guardando…';render();await cloudSave();}
+
+function topBar(){const set=playerSet();return `<div class="top"><div class="topin"><div class="brand"><div class="brandlogo">🎭</div><div><b>Carnaval Uruguay</b><small>${set?esc(set.name):'v0.3'}</small></div></div><div class="topright"><span class="cloud" id="cloudState">${cloudState}</span><span class="username muted">@${esc(profile?.username||'')}</span><button class="btn alt small" data-act="logout">Salir</button></div></div></div>`;}
+function nav(){const items=['Inicio','Plantilla','Mercado','Conjuntos','Calendario','Espectáculo','Actualidad','Bandeja','Actualizaciones'];return `<div class="nav">${items.map(v=>`<button data-act="view" data-view="${v}" class="${U.view===v?'on':''}">${v}${v==='Bandeja'&&unread()?`<span class="badge">${unread()}</span>`:''}</button>`).join('')}</div>`;}
+function gameView(){
+  const set=playerSet();
+  let body='';
+  if(U.view==='Inicio')body=renderHome();if(U.view==='Plantilla')body=renderRoster();if(U.view==='Mercado')body=renderMarket();if(U.view==='Conjuntos')body=renderSets();if(U.view==='Calendario')body=renderCalendar();if(U.view==='Espectáculo')body=renderSpectacle();if(U.view==='Actualidad')body=renderNews();if(U.view==='Bandeja')body=renderInbox();if(U.view==='Actualizaciones')body=renderUpdates();
+  APP.innerHTML=`${topBar()}<div class="wrap">${nav()}${body}</div>${renderModal()}`;
+}
+function render(){if(!session)return authView();if(!S)return setupView();gameView();}
+;
+function renderHome(){
+  const set=playerSet(),reports=S.player.lastReports||[],fin=S.player.lastFinance;
+  return `<div class="hero"><div class="kicker">Temporada ${S.year}</div><div class="split"><div><h1>${esc(set.name)}</h1><p class="muted">${CAT[set.category].label} · ${monthNow()} · Semana ${S.cal.w}</p></div><div class="rating ${playerSpectacleRating()<60?'low':playerSpectacleRating()<75?'mid':''}">${playerSpectacleRating()}</div></div>
+  <div class="stats"><div class="stat"><span>Dinero</span><b>${money(S.player.money)}</b></div><div class="stat"><span>Prestigio</span><b>${set.prestige}</b></div><div class="stat"><span>Popularidad</span><b>${set.popularity}</b></div><div class="stat"><span>Titulares</span><b>${set.roster.filter(a=>a.starter).length}</b></div><div class="stat"><span>Rodaje</span><b>${one(S.player.rubrics['Rodaje general'])}</b></div><div class="stat"><span>Espectáculo</span><b>${playerSpectacleRating()}</b></div></div></div>
+  <div class="grid"><div class="card"><div class="sectiontitle"><div><div class="kicker">Última semana</div><h3>Informes de ensayo</h3></div></div>${fin?`<div class="note ${fin.net>=0?'success':'warn'}">Economía semanal: ingresos ${money(fin.income)} · gastos ${money(fin.expenses)} · <b>${fin.net>=0?'+':''}${money(fin.net)}</b></div>`:''}${reports.length?reports.map(r=>`<div class="report"><b>${esc(r.title)}</b><div class="subtle">${esc(r.explanation)}</div>${r.lines.map(x=>`<div class="mini" style="margin-top:4px">${esc(x)}</div>`).join('')}</div>`).join(''):'<div class="empty">Todavía no hay informes de ensayo.</div>'}</div>
+  <div class="card"><div class="sectiontitle"><div><div class="kicker">Mundo</div><h3>Últimas noticias</h3></div><button class="btn alt small" data-act="view" data-view="Actualidad">Ver todas</button></div>${S.news.slice(0,5).map(n=>`<div class="row"><div><b>${esc(n.text)}</b><small>Semana ${n.week} · ${n.year||S.year}</small></div></div>`).join('')}</div></div>`;
+}
+function ratingClass(v){return v<60?'low':v<75?'mid':'';}
+function renderRoster(){const set=playerSet();return `<div class="card"><div class="sectiontitle"><div><div class="kicker">Tu conjunto</div><h2>Plantilla</h2><p class="muted">Solo los titulares influyen en la valoración del espectáculo. Cambiar la formación reduce temporalmente el rodaje.</p></div></div><div class="scroll"><table><thead><tr><th>Artista</th><th>Rol</th><th>Edad</th><th>Base</th><th>Química</th><th>Efectivo</th><th>Experiencia</th><th>Condición</th><th></th></tr></thead><tbody>${set.roster.slice().sort((a,b)=>Number(b.starter)-Number(a.starter)||artistEffective(b)-artistEffective(a)).map(a=>`<tr><td><button class="star ${favoriteKind('artists',a.id)?'on':''}" data-act="favorite" data-kind="artists" data-id="${a.id}">★</button><button class="btn alt small" data-act="artist" data-id="${a.id}">${esc(a.name)}</button></td><td>${esc(a.role)}</td><td>${a.age}</td><td>${a.rating}</td><td>+${a.chemistry}%</td><td><b>${artistEffective(a)}</b></td><td>${a.experience}</td><td><span class="pill ${a.starter?'green':''}">${a.starter?'Titular':'Suplente'}</span></td><td><div class="actions"><button class="btn small ${a.starter?'alt':'green'}" data-act="toggle-starter" data-id="${a.id}">${a.starter?'Pasar a suplente':'Hacer titular'}</button><button class="btn red small" data-act="release-artist" data-id="${a.id}">Dejar libre</button></div></td></tr>`).join('')}</tbody></table></div></div>
+  <div class="card" style="margin-top:12px"><div class="sectiontitle"><div><div class="kicker">Cuerpo creativo</div><h2>Profesionales</h2></div></div>${setProfessionals(set).map(p=>{const as=assignmentFor(p,set.id);return `<div class="row"><div><b><button class="btn alt small" data-act="pro" data-id="${p.id}">${esc(p.name)}</button> · ${esc(p.type)}</b><small>Base ${p.rating} · Química +${as?.chemistry||0}% · Efectivo ${proEffective(p,set.id)} · Concentración ${concentrationFor(p)}%</small></div><div class="actions"><div class="rating ${ratingClass(p.rating)}">${p.rating}</div><button class="btn red small" data-act="release-pro" data-id="${p.id}">Desvincular</button></div></div>`}).join('')}</div>`;}
+function toggleStarter(aid){const a=artistById(aid);if(!a||a.setId!==S.playerSetId)return;const entering=!a.starter;const expFactor=1-clamp(a.experience/120,0,.65);const penalty=one((entering?0.7:0.5)*(0.7+expFactor));a.starter=entering;S.player.rubrics['Rodaje general']=clamp(one(S.player.rubrics['Rodaje general']-penalty),0,120);notify('Plantel',`${a.name} pasó a ser ${entering?'titular':'suplente'}. Rodaje -${penalty}.`);queueSave();render();}
+;
+function releaseArtist(aid){
+  const set=playerSet(),a=set.roster.find(x=>x.id===aid);if(!a)return;
+  a.pastChemistry[set.id]=a.chemistry||0;set.roster=set.roster.filter(x=>x.id!==aid);a.setId=null;a.status='Libre';a.starter=false;a.tenure=0;a.chemistry=0;S.freeArtists.push(a);
+  addNews(`${a.name} dejó ${set.name} y quedó libre.`);notify('Plantel',`${a.name} fue dejado libre. Si vuelve en el futuro recuperará el 50% de la Química que tenía.`);queueSave();render();
+}
+function releaseProfessional(pid){
+  const set=playerSet(),p=proById(pid),as=p&&assignmentFor(p,set.id);if(!p||!as)return;
+  p.pastChemistry[set.id]=as.chemistry||0;p.assignments=p.assignments.filter(a=>a.setId!==set.id);set.professionalIds=set.professionalIds.filter(x=>x!==pid);
+  addNews(`${p.name} dejó de trabajar con ${set.name}.`);notify('Plantel',`${p.name} fue desvinculado del conjunto.`);queueSave();render();
+}
+;
+function marketArtists(){return allArtists().filter(a=>a.setId!==S.playerSetId);}
+function entityStatus(a){if(a.kind==='artist')return a.setId?`En ${setById(a.setId)?.name||'otro conjunto'}`:'Libre';return a.assignments?.length?`${a.assignments.length} conjunto${a.assignments.length>1?'s':''}`:'Libre';}
+function renderMarket(){
+  const isA=U.marketType==='artists',f=U.filters;
+  let items=isA?marketArtists():S.professionals.filter(p=>!p.assignments.some(a=>a.setId===S.playerSetId));
+  items=items.filter(x=>{
+    const name=x.name.toLowerCase().includes(f.q.toLowerCase());if(!name)return false;
+    if(isA&&f.cat!=='Todas'&&x.category!==f.cat)return false;
+    const role=isA?x.role:x.type;if(f.role!=='Todos'&&role!==f.role)return false;
+    if(f.minRating&&x.rating<Number(f.minRating))return false;
+    if(isA&&f.maxAge&&x.age>Number(f.maxAge))return false;
+    if(f.minExp&&x.experience<Number(f.minExp))return false;
+    const free=isA?!x.setId:!x.assignments.length;if(f.status==='Libre'&&!free)return false;if(f.status==='En conjunto'&&free)return false;
+    if(f.maxSalary&&x.demands.salary>Number(f.maxSalary))return false;
+    if(f.favorites&&!favoriteKind(isA?'artists':'professionals',x.id))return false;
+    return true;
+  }).sort((a,b)=>b.rating-a.rating);
+  const roles=isA?[...new Set(marketArtists().map(a=>a.role))].sort():PRO_TYPES;
+  return `<div class="card"><div class="sectiontitle"><div><div class="kicker">Mercado</div><h2>Artistas y profesionales</h2></div></div><div class="tabs"><button data-act="market-type" data-val="artists" class="${isA?'on':''}">Artistas</button><button data-act="market-type" data-val="professionals" class="${!isA?'on':''}">Profesionales</button></div>
+  <div class="filters"><div class="field"><label>Buscar</label><input data-filter="q" value="${esc(f.q)}" placeholder="Nombre"></div>${isA?`<div class="field"><label>Categoría</label><select data-filter="cat"><option>Todas</option>${Object.keys(CAT).map(c=>`<option ${f.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>`:''}<div class="field"><label>${isA?'Rol':'Especialidad'}</label><select data-filter="role"><option>Todos</option>${roles.map(r=>`<option ${f.role===r?'selected':''}>${esc(r)}</option>`).join('')}</select></div><div class="field"><label>Valoración mínima</label><input data-filter="minRating" type="number" min="0" max="130" value="${esc(f.minRating)}"></div>${isA?`<div class="field"><label>Edad máxima</label><input data-filter="maxAge" type="number" min="18" value="${esc(f.maxAge)}"></div>`:''}<div class="field"><label>Experiencia mínima</label><input data-filter="minExp" type="number" min="0" max="100" value="${esc(f.minExp)}"></div><div class="field"><label>Situación</label><select data-filter="status"><option ${f.status==='Todos'?'selected':''}>Todos</option><option ${f.status==='Libre'?'selected':''}>Libre</option><option ${f.status==='En conjunto'?'selected':''}>En conjunto</option></select></div><div class="field"><label>Pretensión mensual máxima</label><input data-filter="maxSalary" type="number" min="0" value="${esc(f.maxSalary)}" placeholder="$"></div></div>
+  <label class="pill gold"><input type="checkbox" data-filter="favorites" ${f.favorites?'checked':''}> Solo favoritos</label>
+  <div class="scroll" style="margin-top:10px"><table><thead><tr><th></th><th>Nombre</th><th>${isA?'Categoría / Rol':'Especialidad'}</th><th>Valoración</th><th>Experiencia</th><th>Situación</th><th>Pretensión</th><th></th></tr></thead><tbody>${items.slice(0,120).map(x=>{const kind=isA?'artists':'professionals', blocked=!isA&&x.assignments.some(a=>a.category===playerSet().category);return `<tr><td><button class="star ${favoriteKind(kind,x.id)?'on':''}" data-act="favorite" data-kind="${kind}" data-id="${x.id}">★</button></td><td><button class="btn alt small" data-act="${isA?'artist':'pro'}" data-id="${x.id}">${esc(x.name)}</button></td><td>${isA?`${x.category} · ${esc(x.role)}`:esc(x.type)}</td><td><b>${x.rating}</b></td><td>${x.experience}</td><td>${esc(entityStatus(x))}</td><td>${money(x.demands.salary)}/mes</td><td><button class="btn small" data-act="negotiate" data-kind="${kind}" data-id="${x.id}" ${blocked?'disabled':''}>${blocked?'Ya trabaja en esta categoría':'Negociar'}</button></td></tr>`}).join('')}</tbody></table></div>${!items.length?'<div class="empty">No hay resultados con esos filtros.</div>':''}</div>`;
+}
