@@ -101,7 +101,7 @@ function v3Art(set,role){
  artists.forEach(function(a){
   var mainRole=role==='Bailarín'?/Bailarín|Bailarina/.test(a.role):a.role===role;
   var value=(a.attrs[field]||a.rating)*(1+(a.chemistry||0)/100);
-  total+=value*(mainRole?1:(set.category==='Parodistas'||set.category==='Humoristas'?.10:0));if(mainRole)main++;
+  total+=value*(mainRole?1:((set.category==='Parodistas'||set.category==='Humoristas')?0.10:0));if(mainRole)main++;
  });
  return main?one(total/main):0;
 }
