@@ -83,12 +83,25 @@ renderModal=function(){return U.modal==='admission-results'?'<div class="modalbg
 const v2RenderSetModal=renderSetModal;
 renderSetModal=function(set){
  var h=v2RenderSetModal(set);
+ if(set.utileros?.length){h=h.replace('<div class="grid">','<div class="note">Utileros honoríficos: '+set.utileros.map(function(x){return esc(x.name);}).join(', ')+'</div><div class="grid">');}
  if(set.isPlayer){
   var name=S.player.spectacles[String(S.year)]||'Todavía sin nombre';
   h=h.replace('<div class="grid">','<div class="note">Espectáculo '+S.year+': <b>'+esc(name)+'</b> · Club: '+esc(S.player.club.name)+'</div><div class="grid">');
  }
  return h;
 };
+
+APP.addEventListener('change',function(ev){
+ var aid=ev.target.dataset?.v3Drum;if(!aid)return;
+ var a=artistById(aid),newRole=ev.target.value,set=playerSet();
+ if(!a||a.setId!==set.id||!a.starter||!a.role.startsWith('Tambor '))return;
+ if(a.role===newRole)return;
+ var other=set.roster.find(function(x){return x.starter&&x.role===newRole&&x.id!==a.id;});
+ if(!other){alert('No hay un tamborilero de ese instrumento con quien intercambiar.');render();return;}
+ var previous=a.role;a.role=other.role;other.role=previous;
+ notify('Plantel','Se intercambiaron los tambores de '+a.name+' y '+other.name+'.');
+ queueSave();render();
+});
 APP.addEventListener('click',function(ev){
  var b=ev.target.closest('[data-act]');if(!b)return;
  var a=b.dataset.act;
